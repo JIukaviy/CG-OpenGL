@@ -66,10 +66,10 @@ vechnd vec_create3(vec_elem_t x, vec_elem_t y, vec_elem_t z){
 
 void vec_destroy(vechnd* hnd){
 	vec_t* t = hnd2vec(*hnd);
-	if (!hnd)
+	if (!hnd || !*hnd)
 		return;
 
-	gc_on_destroy(t->gc_id);
+	gc_unregist(t->gc_id);
 
 	delete t->data;
 	delete *hnd;
@@ -236,6 +236,17 @@ vechnd vec_normalize(vechnd hnd){
 	return out_hnd;
 }
 
+vechnd vec_invert(vechnd hnd){
+	vec_assert_1(hnd, nullptr);
+	vec_t* t = hnd2vec(hnd);
+	vec_create_out(t->size);
+
+	for (int i = 0; i < t->size; i++)
+		out->data[i] = -t->data[i];
+
+	return out_hnd;
+}
+
 void vec_set_elem(vechnd hnd, int id, vec_elem_t val){
 	vec_assert_1(hnd);
 
@@ -290,6 +301,12 @@ vechnd vec_copy(vechnd hnd){
 	memcpy(hnd2vec(out_hnd)->data, t->data, sizeof(vec_elem_t)*t->size);
 
 	return out_hnd;
+}
+
+void vec_unregist_in_gc(vechnd hnd){
+	vec_assert_1(hnd);
+	vec_t* t = hnd2vec(hnd);
+	gc_unregist(t->gc_id);
 }
 
 bool vec_equal(vechnd a, vechnd b){

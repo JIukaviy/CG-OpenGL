@@ -38,4 +38,5 @@ mat_elem_t mat_get_elem(mathnd hnd, int row, int col);
 mat_elem_t* mat_get_elems(mathnd hnd);
 bool mat_equal(mathnd a, mathnd b);
 mathnd mat_copy(mathnd hnd);
+void mat_copy(mathnd dst, mathnd src);
 void mat_print(mathnd hnd);

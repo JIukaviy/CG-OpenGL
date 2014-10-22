@@ -1,5 +1,6 @@
 #include "vec_mat.h"
 #include "vec_mat_errors.h"
+#include "gc.h"
 
 vme_int unit_id;
 vme_int VM_NULL_IN_DATA;
@@ -79,35 +80,32 @@ mathnd vm_mat_look_at(vechnd cam_pos, vechnd cam_target, vechnd cam_up){
 
 	vechnd vecs[3];
 
-	vechnd vec_t_x = vec_sub(cam_target, cam_pos);
-	vechnd vec_x = vec_normalize(vec_t_x);
-	vec_destroy(&vec_t_x);
-
-	vechnd vec_t_z = vec_cross(vec_x, cam_up);
-	vechnd vec_z = vec_normalize(vec_t_z);
-	vec_destroy(&vec_t_z);
-
-	vechnd vec_t_y = vec_cross(vec_x, vec_z);
-	vechnd vec_y = vec_normalize(vec_t_y);
-	vec_destroy(&vec_t_y);
-
 	mathnd out_mat = mat_create(4, 4);
 
-	vecs[0] = vec_x;
-	vecs[1] = vec_y;
-	vecs[2] = vec_z;
+	start_garbage_collect(1);
 
-	for (int i = 0; i < 3; i++)
-		for (int j = 0; j < 3; j++)
-			mat_set_elem(out_mat, i, j, vec_get_elem(vecs[i], j));
+	vechnd forward = vec_normalize(vec_sub(cam_target, cam_pos));
+	vechnd side = vec_normalize(vec_cross(forward, cam_up));
+	vechnd up = vec_normalize(vec_cross(side, forward));
 
-	for (int i = 0; i < 3; i++)
-		mat_set_elem(out_mat, 3, i, vec_get_elem(cam_pos, i));
+	mat_set_elem(out_mat, 0, 0, vec_get_elem(side, 0));
+	mat_set_elem(out_mat, 0, 1, vec_get_elem(side, 1));
+	mat_set_elem(out_mat, 0, 2, vec_get_elem(side, 2));
+
+	mat_set_elem(out_mat, 1, 0, vec_get_elem(up, 0));
+	mat_set_elem(out_mat, 1, 1, vec_get_elem(up, 1));
+	mat_set_elem(out_mat, 1, 2, vec_get_elem(up, 2));
+
+	mat_set_elem(out_mat, 2, 0, -vec_get_elem(forward, 0));
+	mat_set_elem(out_mat, 2, 1, -vec_get_elem(forward, 1));
+	mat_set_elem(out_mat, 2, 2, -vec_get_elem(forward, 2));
 
 	mat_set_elem(out_mat, 3, 3, 1);
 
-	for (int i = 0; i < 3; i++)
-		vec_destroy(&vecs[i]);
+	mathnd t_out = mat_mul(vm_mat_translate(vec_invert(cam_pos)), out_mat);
+	mat_copy(out_mat, t_out);
+
+	erase_collected_garbage(1);
 
 	return out_mat;
 }

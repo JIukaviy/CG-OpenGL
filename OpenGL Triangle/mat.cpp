@@ -207,7 +207,7 @@ mathnd mat_perspective_projection(mat_elem_t fov, mat_elem_t ratio, mat_elem_t z
 
 void mat_destroy(mathnd* hnd){
 	mat_t* t = hnd2mat(*hnd);
-	if (!hnd) {
+	if (!hnd || !*hnd) {
 		//push_error(MAT_ERR_NULL_IN_DATA);
 		return;
 	}
@@ -215,7 +215,7 @@ void mat_destroy(mathnd* hnd){
 	delete t->data;
 	delete *hnd;
 	*hnd = nullptr;
-	gc_on_destroy(gc_id);
+	gc_unregist(gc_id);
 }
 
 mathnd mat_on_elem(mathnd a, mathnd b, on_elem_pfunc func){
@@ -453,9 +453,24 @@ mathnd mat_copy(mathnd hnd){
 	mat_t* t = hnd2mat(hnd);
 	mat_create_out(t->cols, t->rows);
 
-	memcpy(out->data, t->data, sizeof(mat_elem_t)*t->cols);
+	memcpy(out->data, t->data, sizeof(mat_elem_t)*t->cols*t->rows);
 
 	return out_hnd;
+}
+
+void mat_copy(mathnd dst, mathnd src){
+	mat_assert(dst);
+	mat_assert(src);
+
+	mat_t* t = hnd2mat(dst);
+	mat_t* g = hnd2mat(src);
+
+	if (t->cols != g->cols || t->rows != g->rows) {
+		push_error(MAT_ERR_DIFF_SIZE);
+		return;
+	}
+
+	memcpy(t->data, g->data, sizeof(mat_elem_t)*t->cols*t->rows);
 }
 
 void mat_set_elem(mathnd hnd, int row, int col, mat_elem_t val){

@@ -11,6 +11,8 @@ using namespace std;
 
 int screen_width = 800, screen_height = 600;
 
+bool keys[256];
+
 GLuint program;
 GLint attribute_coord3d;
 GLint attribute_v_color;
@@ -83,6 +85,8 @@ int init_resources() {
 	GLint compile_ok = GL_FALSE;
 	GLchar *info_buffer;
 	info_buffer = new GLchar[200];
+
+	memset(&keys, 0, sizeof(keys));
 
 	// Компилируем вершинный шейдер
 	
@@ -215,14 +219,36 @@ void Display() {
 	glutSwapBuffers();
 }
 
+vechnd world_pos;
+
+void onKeyDown(unsigned char key, int x, int y){
+	keys[key] = true;
+}
+void onKeyUp(unsigned char key, int x, int y){
+	keys[key] = false;
+}
+
+double prev_time = 0;
+
 void idle(){
-	double time = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
-	double move = sin(time * (2 * 3.145) / 5);
-	double angle = time;
+	double time = glutGet(GLUT_ELAPSED_TIME);
+	double move = sin(time * (2 * 3.145) / 5000);
+	double angle = time / 1000;
 	glUseProgram(program);
 
-	vechnd cam_pos = vec_create3(0, 0, 0);
-	vechnd cam_up = vec_create3(0, 0, 1);
+	start_garbage_collect(1);
+
+	mat_elem_t d = 1 * (time - prev_time) / 100;
+
+	if (keys['w']) 	vec_set_elem(world_pos, 2, vec_get_elem(world_pos, 2) - d);
+	if (keys['s'])	vec_set_elem(world_pos, 2, vec_get_elem(world_pos, 2) + d);
+	if (keys['q'])	vec_set_elem(world_pos, 1, vec_get_elem(world_pos, 1) - d);
+	if (keys['e'])	vec_set_elem(world_pos, 1, vec_get_elem(world_pos, 1) + d);
+	if (keys['a'])	vec_set_elem(world_pos, 0, vec_get_elem(world_pos, 0) - d);
+	if (keys['d'])	vec_set_elem(world_pos, 0, vec_get_elem(world_pos, 0) + d);
+
+	vechnd cam_pos = world_pos;
+	vechnd cam_up = vec_create3(0, 1, 0);
 
 	vechnd vec_pos_anim = vec_create3(move, move, -4 + move);
 
@@ -230,16 +256,19 @@ void idle(){
 	mathnd rotate = mat_rotate_mat4(angle, MAT_Y);
 	mathnd translate = vm_mat_translate(vec_pos_anim);
 
-	mathnd model = vm_mat_translate(cam_pos);
-	mathnd view = vm_mat_look_at(cam_pos, vec_pos_anim, cam_up);
+	mathnd model = mat_mul(translate, mat_mul(rotate, scale));
+	//mathnd view = vm_mat_look_at(cam_pos, vec_pos_anim, cam_up);
+	mathnd view = vm_mat_translate(vec_invert(cam_pos));
 	mathnd projection = mat_perspective_projection(45.0, 1.0 * screen_width / screen_height, 0.1, 100.0);
 	//mathnd projection = mat_orthographic_projection(-5, 5, -5, 5, -5, 5);
+	mathnd mvp = mat_mul(projection, mat_mul(view, model));
 
-	mathnd sr = mat_mul(rotate, scale);
-	mathnd srt = mat_mul(translate, sr);
-	mathnd srtm = mat_mul(model, srt);
-	mathnd srtmv = mat_mul(view, srtm);
-	mathnd srtmvp = mat_mul(projection, srtm);
+	if (vme_error_appear()) {
+		vme_print_errors();
+		glutIdleFunc(nullptr);
+	}
+	else
+		glUniformMatrix4fv(uniform_mvp, 1, GL_TRUE, mat_get_elems(mvp));
 
 	/*mat_print(model);
 	mat_print(view);
@@ -247,14 +276,10 @@ void idle(){
 	//mat_print(pvma);
 
 	//mat_print(translate);
-	
-	if (vme_error_appear()) {
-		vme_print_errors();
-		glutIdleFunc(nullptr);
-	} else
-		glUniformMatrix4fv(uniform_mvp, 1, GL_TRUE, mat_get_elems(srtmvp));
 
-	gc_clear_garbage();
+	erase_collected_garbage(1);
+
+	prev_time = time;
 
 	glutPostRedisplay();
 }
@@ -295,6 +320,7 @@ void onReshape(int width, int height) {
 int main(int argc, char **argv) {
 	vm_init();
 	vme_init();
+	gc_init();
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_ALPHA | GLUT_DOUBLE | GLUT_DEPTH);
 	glutInitWindowSize(500, 500);
@@ -313,7 +339,13 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
+	start_garbage_collect(1);
+
+	world_pos = vec_create(3);
+	vec_set_elem(world_pos, 0, 0);
+
 	if (!init_resources()) {
+		glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_CONTINUE_EXECUTION);
 		glutDisplayFunc(Display);
 		glutReshapeFunc(onReshape);
 		glEnable(GL_BLEND);
@@ -322,9 +354,15 @@ int main(int argc, char **argv) {
 		//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glutIdleFunc(idle);
 		glutMouseFunc(onMousePress);
+		glutSetKeyRepeat(GLUT_KEY_REPEAT_OFF);
+		glutKeyboardFunc(onKeyDown);
+		glutKeyboardUpFunc(onKeyUp);
 		glutMotionFunc(onMouseMotion);
 		glutMainLoop();
 	}
+
+	erase_collected_garbage(1);
+	gc_clear_all_garbage();
 
 	free_resources();
 	system("pause");

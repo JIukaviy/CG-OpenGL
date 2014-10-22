@@ -2,7 +2,6 @@
 #include <string>
 #include <iostream>
 #define ERR_STACK_SIZE 20
-#define CALL_STACK_SIZE 30
 
 using namespace std;
 
@@ -150,11 +149,11 @@ errhnd vme_get_last_err(vme_int unit_id){
 void vme_print_error(errhnd error){
 	error_t* err = (error_t*)error;
 
-	cout << "Error in unit: " << error_types[err->type].unit_name << ". " << "In function: " << err->func_name << ", " << "On line: " << err->line << ", ";
-	cout << error_types[err->type].info << ", ";
+	cout << "Error in unit: " << error_types[err->type].unit_name << endl << "In function: " << err->func_name << endl << "On line: " << err->line << endl;
+	cout << "Error type info: " << error_types[err->type].info << endl;
 	if (err->info)
-		cout << err->info;
-	cout << endl;
+		cout << "Error info: " << err->info << endl;
+	cout << "___________" << endl;
 }
 
 void vme_print_errors(){

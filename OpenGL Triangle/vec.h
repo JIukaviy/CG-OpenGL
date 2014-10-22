@@ -17,6 +17,7 @@ vechnd vec_add(vechnd a, vec_elem_t b);
 vechnd vec_sub(vechnd a, vec_elem_t b);
 vechnd vec_mul(vechnd a, vec_elem_t b);
 vechnd vec_div(vechnd a, vec_elem_t b);
+vechnd vec_invert(vechnd hnd);
 vec_elem_t vec_length(vechnd);
 int vec_size(vechnd);
 vec_elem_t vec_dot(vechnd a, vechnd b);    //скалярное произведение
