@@ -1,17 +1,19 @@
 #include "vec.h"
 #include "vec_mat_errors.h"
+#include "gc.h"
 #include <string>
 #include <iostream>
 
 #define hnd2vec(x) ((vec_t*)(x))
-#define vec_assert_1(x) if (!x || !hnd2vec(x)->data) { push_error_info(VEC_ERR_NULL_IN_DATA, "In argument: "#x); return nullptr;	}\
-						if (hnd2vec(x)->size < 1 || hnd2vec(x)->size > VEC_MAX_SIZE) {	 push_error(VEC_ERR_BAD_SIZE); return nullptr;}
-#define vec_assert_2(x, y) if (vec_validate((x), (y))) return nullptr;
+#define vec_assert_1(x, ret) if (!x || !hnd2vec(x)->data) { push_error_info(VEC_ERR_NULL_IN_DATA, "In argument: "#x); return ret;}\
+						if (hnd2vec(x)->size < 1 || hnd2vec(x)->size > VEC_MAX_SIZE) {push_error(VEC_ERR_BAD_SIZE); return ret;}
+#define vec_assert_2(x, y, ret) vec_assert_1(x, ret); vec_assert_1(y, ret); if (hnd2vec(x)->size != hnd2vec(y)->size) {push_error(VEC_ERR_DIFF_SIZE); return ret;}
 #define vec_create_out(size_name) vechnd out_hnd = vec_create(size_name); vec_t* out = hnd2vec(out_hnd);
 
 struct vec_t {
 	vec_elem_t* data;
 	int size;
+	gc_id_t gc_id;
 };
 
 typedef vec_elem_t(*on_elem_pfunc)(vec_elem_t a, vec_elem_t b);
@@ -33,43 +35,6 @@ void vec_init(){
 	VEC_ERR_OUT_OF_BOUNDS = vme_register_error_type(vec_unit_id, "Out of bounds of vector coordinates");
 }
 
-
- vme_int vec_validate(vechnd a){
-	vec_t* t = hnd2vec(a);
-
-	if (!t || !t->data) {
-		push_error(VEC_ERR_NULL_IN_DATA);
-		return VEC_ERR_NULL_IN_DATA;
-	}
-
-	if (t->size < 1 || t->size > VEC_MAX_SIZE) {
-		push_error(VEC_ERR_BAD_SIZE);
-		return VEC_ERR_BAD_SIZE;
-	}
-
-	return 0;
-}
-
-vme_int vec_validate(vechnd a, vechnd b){
-	vec_t* t = hnd2vec(a);
-	vec_t* g = hnd2vec(b);
-
-	if (vme_int err_code = vec_validate(a)) {
-		vme_set_error_info(vme_get_last_err(vec_unit_id), "In first argument");
-		return err_code;
-	}
-	if (vme_int err_code = vec_validate(b)) {
-		vme_set_error_info(vme_get_last_err(vec_unit_id), "In second argument");
-		return err_code;
-	}
-	if (t->size != g->size) {
-		push_error(VEC_ERR_DIFF_SIZE);
-		return VEC_ERR_DIFF_SIZE;
-	}
-
-	return 0;
-}
-
 vechnd vec_create(int size){
 	if (size < 1 || size > VEC_MAX_SIZE) {
 		push_error(VEC_ERR_BAD_SIZE);
@@ -84,24 +49,38 @@ vechnd vec_create(int size){
 
 	newvec->size = size;
 
+	newvec->gc_id = gc_push_garbage(newvec, vec_destroy);
+
 	return (vechnd*)newvec;
 }
 
-void vec_destroy(vechnd* a){
-	if (!a || vec_validate(*a))
+vechnd vec_create3(vec_elem_t x, vec_elem_t y, vec_elem_t z){
+	vec_create_out(3);
+
+	vec_set_elem(out_hnd, 0, x);
+	vec_set_elem(out_hnd, 1, y);
+	vec_set_elem(out_hnd, 2, z);
+
+	return out_hnd;
+}
+
+void vec_destroy(vechnd* hnd){
+	vec_t* t = hnd2vec(*hnd);
+	if (!hnd)
 		return;
 
-	delete hnd2vec(*a)->data;
+	gc_on_destroy(t->gc_id);
 
-	delete *a;
-	*a = nullptr;
+	delete t->data;
+	delete *hnd;
+	*hnd = nullptr;
 }
 
 vechnd vec_on_elem(vechnd a, vechnd b, on_elem_pfunc func){
 	vec_t* t = hnd2vec(a);
 	vec_t* g = hnd2vec(b);
 
-	vec_assert_2(a, b);
+	vec_assert_2(a, b, nullptr);
 
 	vec_create_out(t->size);	
 
@@ -118,7 +97,7 @@ vechnd vec_on_elem(vechnd a, vechnd b, on_elem_pfunc func){
 vechnd vec_on_elem(vechnd a, vec_elem_t b, on_elem_pfunc func){
 	vec_t* t = hnd2vec(a);
 
-	vec_assert_1(a);
+	vec_assert_1(a, nullptr);
 
 	vec_create_out(t->size);
 
@@ -133,13 +112,13 @@ vechnd vec_on_elem(vechnd a, vec_elem_t b, on_elem_pfunc func){
 }
 
 vechnd vec_cross(vechnd a, vechnd b){
+	vec_assert_2(a, b, nullptr);
+
 	vec_t* t = hnd2vec(a);
 	vec_t* g = hnd2vec(b);
 
-	vec_assert_2(a, b);
-
 	if (t->size != 3 || g->size != 3) {
-		push_error(VEC_ERR_BAD_SIZE);
+		push_error_info(VEC_ERR_BAD_SIZE, "Cross of two vectors available only for 3 dimensional vectors");
 		return nullptr;
 	}
 
@@ -157,8 +136,7 @@ vechnd vec_cross(vechnd a, vechnd b){
 }
 
 vec_elem_t vec_dot(vechnd a, vechnd b){	
-	if (vec_validate(a, b))
-		return NAN;
+	vec_assert_2(a, b, NAN);
 
 	vec_t* t = hnd2vec(a);
 	vec_t* g = hnd2vec(b);
@@ -227,11 +205,10 @@ vechnd vec_div(vechnd a, vec_elem_t b, vechnd* out_hnd){
 	return vec_on_elem(a, b, vec_on_elem_div);
 }
 
-vec_elem_t vec_length(vechnd a){
-	if (vec_validate(a))
-		return NAN;
+vec_elem_t vec_length(vechnd hnd){
+	vec_assert_1(hnd, NAN);
 	
-	vec_t* t = hnd2vec(a);
+	vec_t* t = hnd2vec(hnd);
 	vec_elem_t res = 0;
 
 	for (int i = 0; i < t->size; i++)
@@ -240,21 +217,18 @@ vec_elem_t vec_length(vechnd a){
 	return sqrt(res);
 }
 
-int vec_size(vechnd a){
-	if (!a) {
-		push_error(VEC_ERR_NULL_IN_DATA);
-		return 0;
-	}
+int vec_size(vechnd hnd){
+	vec_assert_1(hnd, 0);
 
-	return hnd2vec(a)->size;
+	return hnd2vec(hnd)->size;
 }
 
-vechnd vec_normalize(vechnd in_hnd){
-	vec_assert_1(in_hnd);
+vechnd vec_normalize(vechnd hnd){
+	vec_assert_1(hnd, nullptr);
 
-	vec_t* t = hnd2vec(in_hnd);
-	vechnd out_hnd = vec_copy(in_hnd);
-	vec_elem_t len = vec_length(in_hnd);
+	vec_t* t = hnd2vec(hnd);
+	vechnd out_hnd = vec_copy(hnd);
+	vec_elem_t len = vec_length(hnd);
 
 	for (int i = 0; i < t->size; i++)
 		hnd2vec(out_hnd)->data[i] /= len;
@@ -262,11 +236,10 @@ vechnd vec_normalize(vechnd in_hnd){
 	return out_hnd;
 }
 
-void vec_set_elem(vechnd a, int id, vec_elem_t val){
-	if (vec_validate(a))
-		return;
+void vec_set_elem(vechnd hnd, int id, vec_elem_t val){
+	vec_assert_1(hnd);
 
-	vec_t* t = hnd2vec(a);
+	vec_t* t = hnd2vec(hnd);
 
 	if (id < 0 || id > t->size - 1) {
 		push_error(VEC_ERR_BAD_SIZE);
@@ -276,25 +249,23 @@ void vec_set_elem(vechnd a, int id, vec_elem_t val){
 	t->data[id] = val;
 }
 
-void vec_set_elems(vechnd a, vec_elem_t* elems){
-	if (vec_validate(a))
-		return;
+void vec_set_elems(vechnd hnd, vec_elem_t* elems){
+	vec_assert_1(hnd);
 
 	if (!elems) {
 		push_error(VEC_ERR_NULL_IN_DATA);
 		return;
 	}
 
-	vec_t *t = hnd2vec(a);
+	vec_t *t = hnd2vec(hnd);
 
 	memcpy(t->data, elems, sizeof(vec_elem_t)*t->size);
 }
 
-vec_elem_t vec_get_elem(vechnd a, int id){
-	if (vec_validate(a))
-		return NAN;
+vec_elem_t vec_get_elem(vechnd hnd, int id){
+	vec_assert_1(hnd, NAN);
 
-	vec_t* t = hnd2vec(a);
+	vec_t* t = hnd2vec(hnd);
 
 	if (id < 0 || id > t->size - 1) {
 		push_error(VEC_ERR_BAD_SIZE);
@@ -304,16 +275,16 @@ vec_elem_t vec_get_elem(vechnd a, int id){
 	return t->data[id];
 }
 
-vec_elem_t* vec_get_elems(vechnd in_hnd){
-	vec_assert_1(in_hnd);
+vec_elem_t* vec_get_elems(vechnd hnd){
+	vec_assert_1(hnd, nullptr);
 
-	return hnd2vec(in_hnd)->data;
+	return hnd2vec(hnd)->data;
 }
 
-vechnd vec_copy(vechnd in_hnd){
-	vec_assert_1(in_hnd);
+vechnd vec_copy(vechnd hnd){
+	vec_assert_1(hnd, nullptr);
 
-	vec_t* t = hnd2vec(in_hnd);
+	vec_t* t = hnd2vec(hnd);
 	vec_create_out(t->size);
 
 	memcpy(hnd2vec(out_hnd)->data, t->data, sizeof(vec_elem_t)*t->size);
@@ -322,8 +293,7 @@ vechnd vec_copy(vechnd in_hnd){
 }
 
 bool vec_equal(vechnd a, vechnd b){
-	if (vec_validate(a, b))
-		return false;
+	vec_assert_1(a, b, false);
 
 	vec_t* t = hnd2vec(a);
 	vec_t* g = hnd2vec(b);
@@ -332,8 +302,7 @@ bool vec_equal(vechnd a, vechnd b){
 }
 
 void vec_print(vechnd a){
-	if (vec_validate(a))
-		return;
+	vec_assert_1(a);
 
 	vec_t* t = hnd2vec(a);
 

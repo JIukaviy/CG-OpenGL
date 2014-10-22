@@ -1,6 +1,7 @@
 #define GLEW_STATIC
 #include <GL\glew.h>
 #include <GL\freeglut.h>
+#include "gc.h"
 #include "vec_mat.h"
 #include "vec_mat_errors.h"
 #include <iostream>
@@ -8,11 +9,13 @@
 
 using namespace std;
 
+int screen_width = 800, screen_height = 600;
+
 GLuint program;
 GLint attribute_coord3d;
 GLint attribute_v_color;
-GLint uniform_m_transform;
 GLint uniform_fade;
+GLint uniform_mvp;
 GLuint vbo_triangle_vertices;
 GLuint vbo_triangle_colors;
 GLuint ibo_triangle_elements;
@@ -111,10 +114,10 @@ int init_resources() {
 	//Создание VBO
 
 	GLfloat triangle_vertices[] = {
-		0.0, 0.8, 0.0,
-		-0.69282, -0.4, 0.4,
-		0.69282, -0.4, 0.4,
-		0.0, -0.4, -0.4
+		0.0, 0.5, 0.0,
+		-0.5, -0.5, 0.5,
+		0.5, -0.5, 0.5,
+		0.0, -0.5, -0.5
 	};
 
 	glGenBuffers(1, &vbo_triangle_vertices);
@@ -173,11 +176,11 @@ int init_resources() {
 		return 1;
 	}
 
-	uniform_name = "m_transform";
-	uniform_m_transform = glGetUniformLocation(program, uniform_name);
-	if (uniform_m_transform == -1) {
+	uniform_name = "mvp";
+	uniform_mvp = glGetUniformLocation(program, uniform_name);
+	if (uniform_mvp == -1) {
 		fprintf(stderr, "Could not bind uniform %s\n", uniform_name);
-		return 1;
+		return 0;
 	}
 
 	return 0;
@@ -217,13 +220,42 @@ void idle(){
 	double move = sin(time * (2 * 3.145) / 5);
 	double angle = time;
 	glUseProgram(program);
+
+	vechnd cam_pos = vec_create3(0, 0, 0);
+	vechnd cam_up = vec_create3(0, 0, 1);
+
+	vechnd vec_pos_anim = vec_create3(move, move, -4 + move);
+
+	mathnd scale = mat_scale(1.5);
+	mathnd rotate = mat_rotate_mat4(angle, MAT_Y);
+	mathnd translate = vm_mat_translate(vec_pos_anim);
+
+	mathnd model = vm_mat_translate(cam_pos);
+	mathnd view = vm_mat_look_at(cam_pos, vec_pos_anim, cam_up);
+	mathnd projection = mat_perspective_projection(45.0, 1.0 * screen_width / screen_height, 0.1, 100.0);
+	//mathnd projection = mat_orthographic_projection(-5, 5, -5, 5, -5, 5);
+
+	mathnd sr = mat_mul(rotate, scale);
+	mathnd srt = mat_mul(translate, sr);
+	mathnd srtm = mat_mul(model, srt);
+	mathnd srtmv = mat_mul(view, srtm);
+	mathnd srtmvp = mat_mul(projection, srtm);
+
+	/*mat_print(model);
+	mat_print(view);
+	mat_print(projection);*/
+	//mat_print(pvma);
+
+	//mat_print(translate);
 	
-	mat_elem_t* elems = mat_get_elems(rotate_mat);
-	if (!elems) {
+	if (vme_error_appear()) {
 		vme_print_errors();
 		glutIdleFunc(nullptr);
 	} else
-		glUniformMatrix4fv(uniform_m_transform, 1, GL_FALSE, elems);
+		glUniformMatrix4fv(uniform_mvp, 1, GL_TRUE, mat_get_elems(srtmvp));
+
+	gc_clear_garbage();
+
 	glutPostRedisplay();
 }
 
@@ -254,6 +286,12 @@ void onMouseMotion(int x, int y) {
 	}
 }
 
+void onReshape(int width, int height) {
+	screen_width = width;
+	screen_height = height;
+	glViewport(0, 0, screen_width, screen_height);
+}
+
 int main(int argc, char **argv) {
 	vm_init();
 	vme_init();
@@ -275,11 +313,9 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
-	rotate_mat = mat_rotate_mat4(3.145, MAT_Z);
-	mat_print(rotate_mat);
-
 	if (!init_resources()) {
 		glutDisplayFunc(Display);
+		glutReshapeFunc(onReshape);
 		glEnable(GL_BLEND);
 		glEnable(GL_DEPTH_TEST);
 		//glDepthFunc(GL_LESS);

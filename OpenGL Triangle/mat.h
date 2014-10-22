@@ -16,6 +16,10 @@ mathnd mat_create(int rows, int cols);
 mathnd mat_rotate_mat2(mat_elem_t angle);
 mathnd mat_rotate_mat3(mat_elem_t angle, mat_axis axis);
 mathnd mat_rotate_mat4(mat_elem_t angle, mat_axis axis);
+mathnd mat_translate(mat_elem_t x, mat_elem_t y, mat_elem_t z);
+mathnd mat_scale(mat_elem_t q);
+mathnd mat_orthographic_projection(mat_elem_t left, mat_elem_t right, mat_elem_t bottom, mat_elem_t top, mat_elem_t near_val, mat_elem_t far_val);
+mathnd mat_perspective_projection(mat_elem_t fov, mat_elem_t ratio, mat_elem_t z_near, mat_elem_t z_far);
 void mat_destroy(mathnd*);  //
 mathnd mat_add(mathnd a, mathnd b);
 mathnd mat_sub(mathnd a, mathnd b);

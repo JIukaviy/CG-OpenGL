@@ -2,6 +2,7 @@
 #include <string>
 #include <iostream>
 #define ERR_STACK_SIZE 20
+#define CALL_STACK_SIZE 30
 
 using namespace std;
 
@@ -26,6 +27,11 @@ struct unit_t {
 	int errors_count;
 	int last_err_pos;
 	char* name;
+};
+
+struct call_stack_elem_t{
+	vme_int unit_id;
+	char *func_name;
 };
 
 typedef unit_t* unit_hnd;
@@ -56,7 +62,7 @@ void clear_err(error_t* error){
 }
 
 void next_err(){
-	if (curr_err < &err_stack[0] + ERR_STACK_SIZE && curr_err)
+	if (curr_err < &err_stack[0] + ERR_STACK_SIZE - 1 && curr_err)
 		curr_err++;
 	else 
 		curr_err = &err_stack[0];
@@ -125,6 +131,10 @@ vme_error vme_push_error(vme_int error_type_id, char* func_name, int line, char*
 	unit->last_err_pos = (unit->last_err_pos + 1) % ERR_STACK_SIZE;
 	unit->errors[unit->last_err_pos] = curr_err;
 	unit->error_appear = error_appear = true;
+}
+
+void vme_push_call_stack(vme_int unit_id, char* func_name){
+
 }
 
 errhnd vme_get_last_err(){

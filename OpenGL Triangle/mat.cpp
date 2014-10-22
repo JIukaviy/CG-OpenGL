@@ -1,24 +1,26 @@
 #include "mat.h"
+#include "gc.h"
 #include "vec_mat_errors.h"
 #include <iostream>
+#include <fstream>
 #include <string>
 
 #define hnd2mat(x) ((mat_t*)(x))
 #define mat_assert(x, ret) if (!x || !hnd2mat(x)->data) { push_error_info(MAT_ERR_NULL_IN_DATA, "In argument: "#x); return ret;}\
 					  if (!mat_validate_size(hnd2mat(x)->rows, hnd2mat(x)->cols)) { push_error(MAT_ERR_BAD_SIZE); return ret;}
 #define get_elem(mat_name, row, col) ((mat_name)->data[(row)*((mat_name)->cols)+(col)])
-#define mat_create_out(cols_name, rows_name) mathnd out_hnd = mat_create((rows_name), (cols_name)); mat_t* out = hnd2mat(out_hnd)
+#define mat_create_out(cols_name, rows_name) mathnd out_hnd = mat_create((rows_name), (cols_name)); mat_t* out = hnd2mat(out_hnd);
 
 struct mat_t {
 	mat_elem_t* data;
 	int rows;
 	int cols;
+	gc_id_t gc_id;
 };
 
 typedef mat_elem_t(*on_elem_pfunc)(mat_elem_t, mat_elem_t);
 
 int mat_unit_id;
-int MAT_ERR_OK = 0;
 int MAT_ERR_BAD_SIZE;
 int MAT_ERR_DIFF_SIZE;
 int MAT_ERR_NULL_IN_DATA;
@@ -71,9 +73,19 @@ mathnd mat_create(int rows, int cols){
 	mat->cols = cols;
 	mat->rows = rows;
 
+	mat->gc_id = gc_push_garbage(mat, mat_destroy);
+
 	return (mathnd)mat;
 }
 
+mathnd mat_create_e(int n){
+	mat_create_out(n, n);
+
+	for (int i = 0; i < n; i++)
+		mat_set_elem(out_hnd, i, i, 1);
+
+	return out_hnd;
+}
 
 mathnd mat_rotate_mat2(mat_elem_t angle){
 	mat_create_out(2, 2);
@@ -136,17 +148,74 @@ mathnd mat_rotate_mat4(mat_elem_t angle, mat_axis axis){
 	return out_hnd;
 }
 
+mathnd mat_translate(mat_elem_t x, mat_elem_t y, mat_elem_t z){
+	mathnd out_hnd = mat_create_e(4);
+
+	mat_set_elem(out_hnd, 0, 3, x);
+	mat_set_elem(out_hnd, 1, 3, y);
+	mat_set_elem(out_hnd, 2, 3, z);
+
+	mat_elem_t* elems = mat_get_elems(out_hnd);
+	/*
+	for (int j = 0; j < 16; j += 4) {
+		for (int i = 0; i < 4; i++)
+			std::cout << elems[j + i] << ' ';
+		std::cout << std::endl;
+	}
+	*/
+	return out_hnd;
+}
+
+mathnd mat_scale(mat_elem_t q){
+	mat_create_out(4, 4);
+
+	for (int i = 0; i < 3; i++)
+		mat_set_elem(out_hnd, i, i, q);
+
+	mat_set_elem(out_hnd, 3, 3, 1);
+
+	return out_hnd;
+}
+
+mathnd mat_orthographic_projection(mat_elem_t left, mat_elem_t right, mat_elem_t bottom, mat_elem_t top, mat_elem_t near_val, mat_elem_t far_val) {
+	mat_create_out(4, 4);
+
+	mat_set_elem(out_hnd, 0, 0, 2/(right-left));
+	mat_set_elem(out_hnd, 0, 3, -(right + left) / (right - left));
+	mat_set_elem(out_hnd, 1, 1, 2 / (top - bottom));
+	mat_set_elem(out_hnd, 1, 3, -(top + bottom) / (top - bottom));
+	mat_set_elem(out_hnd, 2, 2, -2 / (far_val - near_val));
+	mat_set_elem(out_hnd, 2, 3, -(far_val + near_val) / (far_val - near_val));
+	mat_set_elem(out_hnd, 3, 3, 1);
+
+	return out_hnd;
+}
+
+mathnd mat_perspective_projection(mat_elem_t fov, mat_elem_t ratio, mat_elem_t z_near, mat_elem_t z_far) {
+	mat_create_out(4, 4);
+
+	mat_elem_t f = 1.0 / tan(fov*3.1415/360.0);
+
+	mat_set_elem(out_hnd, 0, 0, f / ratio);
+	mat_set_elem(out_hnd, 1, 1, f);
+	mat_set_elem(out_hnd, 2, 2, -(z_far + z_near) / (z_far - z_near));
+	mat_set_elem(out_hnd, 2, 3, -2.0 * z_far * z_near / (z_far - z_near));
+	mat_set_elem(out_hnd, 3, 2, -1);
+
+	return out_hnd;
+}
+
 void mat_destroy(mathnd* hnd){
+	mat_t* t = hnd2mat(*hnd);
 	if (!hnd) {
 		//push_error(MAT_ERR_NULL_IN_DATA);
 		return;
 	}
-
-	mat_t* t = hnd2mat(*hnd);
-
+	gc_id_t gc_id = t->gc_id;
 	delete t->data;
 	delete *hnd;
 	*hnd = nullptr;
+	gc_on_destroy(gc_id);
 }
 
 mathnd mat_on_elem(mathnd a, mathnd b, on_elem_pfunc func){
@@ -241,11 +310,11 @@ mathnd mat_mul(mathnd a, mathnd b){
 	mat_t* g = hnd2mat(b);
 
 	if (t->cols != g->rows) {
-		push_error(MAT_ERR_DIFF_SIZE);
+		push_error_info(MAT_ERR_BAD_SIZE, "Count of cols of matrix A must be equal count of rows of matrix B");
 		return nullptr;
 	}
 
-	mat_create_out(t->rows, g->cols);
+	mat_create_out(g->cols, t->rows);
 
 	for (int i = 0; i < out->rows; i++)
 		for (int j = 0; j < out->cols; j++)
@@ -464,20 +533,29 @@ bool mat_equal(mathnd a, mathnd b){
 	return !memcmp(t->data, g->data, t->cols*t->rows);
 }
 
+using namespace std;
+
+#ifdef IN_FILE
+	ofstream fout("output.txt");
+	#define scout fout
+#else
+	#define scout cout
+#endif
+
 void mat_print(mathnd hnd){
 	mat_assert(hnd);
 
 	mat_t* t = hnd2mat(hnd);
 
 	for (int i = 0; i < t->rows; i++) {
-		std::cout << '(';
+		scout << '{';
 		for (int j = 0; j < t->cols; j++) {
-			std::cout << get_elem(t, i, j);
+			scout << get_elem(t, i, j);
 			if (j < t->cols - 1)
-				std::cout << ", ";
+				scout << ", ";
 		}
-		std::cout << ')' << std::endl;
+		scout << "}," << endl;
 	}
 
-	std::cout << std::endl;
+	scout << endl;
 }
