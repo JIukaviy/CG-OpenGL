@@ -64,6 +64,29 @@ vechnd vec_create3(vec_elem_t x, vec_elem_t y, vec_elem_t z){
 	return out_hnd;
 }
 
+vechnd vec_create4(vec_elem_t x, vec_elem_t y, vec_elem_t z, vec_elem_t w){
+	vec_create_out(4);
+
+	vec_set_elem(out_hnd, 0, x);
+	vec_set_elem(out_hnd, 1, y);
+	vec_set_elem(out_hnd, 2, z);
+	vec_set_elem(out_hnd, 3, w);
+
+	return out_hnd;
+}
+
+vechnd vec_create4(vechnd vec3, vec_elem_t w){
+	vec_create_out(4);
+	if (hnd2vec(vec3)->size != 3) {
+		push_error_info(VEC_ERR_BAD_SIZE, "Size of vector not equal 3");
+		return nullptr;
+	}
+	memcpy(out->data, hnd2vec(vec3)->data, sizeof(vec_elem_t) * 3);
+	vec_set_elem(out_hnd, 3, w);
+
+	return out_hnd;
+}
+
 void vec_destroy(vechnd* hnd){
 	vec_t* t = hnd2vec(*hnd);
 	if (!hnd || !*hnd)
@@ -189,19 +212,19 @@ vechnd vec_div(vechnd a, vechnd b){
 
 
 
-vechnd vec_add(vechnd a, vec_elem_t b, vechnd* out_hnd){
+vechnd vec_add(vechnd a, vec_elem_t b){
 	return vec_on_elem(a, b, vec_on_elem_add);
 }
 
-vechnd vec_sub(vechnd a, vec_elem_t b, vechnd* out_hnd){
+vechnd vec_sub(vechnd a, vec_elem_t b){
 	return vec_on_elem(a, b, vec_on_elem_sub);
 }
 
-vechnd vec_mul(vechnd a, vec_elem_t b, vechnd* out_hnd){
+vechnd vec_mul(vechnd a, vec_elem_t b){
 	return vec_on_elem(a, b, vec_on_elem_muls);
 }
 
-vechnd vec_div(vechnd a, vec_elem_t b, vechnd* out_hnd){
+vechnd vec_div(vechnd a, vec_elem_t b){
 	return vec_on_elem(a, b, vec_on_elem_div);
 }
 
@@ -301,6 +324,15 @@ vechnd vec_copy(vechnd hnd){
 	memcpy(hnd2vec(out_hnd)->data, t->data, sizeof(vec_elem_t)*t->size);
 
 	return out_hnd;
+}
+
+void vec_copy(vechnd dst, vechnd src){
+	vec_assert_2(dst, src);
+
+	vec_t* t = hnd2vec(dst);
+	vec_t* g = hnd2vec(src);
+
+	memcpy(t->data, g->data, sizeof(vec_elem_t)*t->size);
 }
 
 void vec_unregist_in_gc(vechnd hnd){

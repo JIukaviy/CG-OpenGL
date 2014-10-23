@@ -219,14 +219,18 @@ void Display() {
 	glutSwapBuffers();
 }
 
-vechnd world_pos;
-
 void onKeyDown(unsigned char key, int x, int y){
 	keys[key] = true;
 }
 void onKeyUp(unsigned char key, int x, int y){
 	keys[key] = false;
 }
+
+
+vechnd cam_pos;
+vechnd world_cam_target;
+float cam_x = 0;
+float cam_y = 0;
 
 double prev_time = 0;
 
@@ -240,25 +244,47 @@ void idle(){
 
 	mat_elem_t d = 1 * (time - prev_time) / 100;
 
-	if (keys['w']) 	vec_set_elem(world_pos, 2, vec_get_elem(world_pos, 2) - d);
-	if (keys['s'])	vec_set_elem(world_pos, 2, vec_get_elem(world_pos, 2) + d);
-	if (keys['q'])	vec_set_elem(world_pos, 1, vec_get_elem(world_pos, 1) - d);
-	if (keys['e'])	vec_set_elem(world_pos, 1, vec_get_elem(world_pos, 1) + d);
-	if (keys['a'])	vec_set_elem(world_pos, 0, vec_get_elem(world_pos, 0) - d);
-	if (keys['d'])	vec_set_elem(world_pos, 0, vec_get_elem(world_pos, 0) + d);
+	if (keys['g'])  cam_x -= d / 5;
+	if (keys['j'])  cam_x += d / 5;
+	if (keys['y'])  cam_y -= d / 5;
+	if (keys['h'])  cam_y += d / 5;
 
-	vechnd cam_pos = world_pos;
 	vechnd cam_up = vec_create3(0, 1, 0);
+	vechnd t_cam_pos = vec_copy(cam_pos);
+	vechnd cam_target = vec_create(3);
 
-	vechnd vec_pos_anim = vec_create3(move, move, -4 + move);
+	mathnd rotate_cam = mat_mul(mat_rotate_mat4(cam_y, MAT_X), mat_rotate_mat4(cam_x, MAT_Y));
+	vechnd cam_direction = vec_normalize(vm_mat_vec_mul(rotate_cam, vec_create4(0, 0, 1, 0)));
+	cam_direction = vec_create3(vec_get_elem(cam_direction, 0), vec_get_elem(cam_direction, 1), vec_get_elem(cam_direction, 2));
+
+	vechnd forward_direction = cam_direction;
+	vechnd bacward_direction = vec_invert(cam_direction);
+	vechnd right_direction = vec_cross(forward_direction, cam_up);
+	vechnd left_direction = vec_invert(right_direction);
+	vechnd up_direction = vec_invert(cam_up);
+	vechnd down_direction = cam_up;
+	
+	if (keys['w']) 	t_cam_pos = vec_sub(t_cam_pos, vec_mul(forward_direction, d));
+	if (keys['s'])	t_cam_pos = vec_sub(t_cam_pos, vec_mul(bacward_direction, d));
+	if (keys['q'])	t_cam_pos = vec_sub(t_cam_pos, vec_mul(down_direction, d));
+	if (keys['e'])	t_cam_pos = vec_sub(t_cam_pos, vec_mul(up_direction, d));
+	if (keys['a'])	t_cam_pos = vec_sub(t_cam_pos, vec_mul(left_direction, d));
+	if (keys['d'])	t_cam_pos = vec_sub(t_cam_pos, vec_mul(right_direction, d));
+
+	vec_copy(cam_pos, t_cam_pos);
+	vec_copy(cam_up, up_direction);
+
+	vechnd triangle_pos = vec_create3(0, 0, -4);
 
 	mathnd scale = mat_scale(1.5);
-	mathnd rotate = mat_rotate_mat4(angle, MAT_Y);
-	mathnd translate = vm_mat_translate(vec_pos_anim);
+	mathnd rotate = mat_rotate_mat4(0, MAT_Y);
+	mathnd translate = vm_mat_translate(triangle_pos);
 
 	mathnd model = mat_mul(translate, mat_mul(rotate, scale));
 	//mathnd view = vm_mat_look_at(cam_pos, vec_pos_anim, cam_up);
-	mathnd view = vm_mat_translate(vec_invert(cam_pos));
+
+	mathnd view = mat_mul(rotate_cam, vm_mat_translate(vec_invert(cam_pos)));
+	//mathnd view = vm_mat_translate(vec_invert(cam_pos));
 	mathnd projection = mat_perspective_projection(45.0, 1.0 * screen_width / screen_height, 0.1, 100.0);
 	//mathnd projection = mat_orthographic_projection(-5, 5, -5, 5, -5, 5);
 	mathnd mvp = mat_mul(projection, mat_mul(view, model));
@@ -269,13 +295,6 @@ void idle(){
 	}
 	else
 		glUniformMatrix4fv(uniform_mvp, 1, GL_TRUE, mat_get_elems(mvp));
-
-	/*mat_print(model);
-	mat_print(view);
-	mat_print(projection);*/
-	//mat_print(pvma);
-
-	//mat_print(translate);
 
 	erase_collected_garbage(1);
 
@@ -341,8 +360,9 @@ int main(int argc, char **argv) {
 
 	start_garbage_collect(1);
 
-	world_pos = vec_create(3);
-	vec_set_elem(world_pos, 0, 0);
+	cam_pos = vec_create(3);
+	world_cam_target = vec_create(3);
+
 
 	if (!init_resources()) {
 		glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_CONTINUE_EXECUTION);
@@ -357,7 +377,7 @@ int main(int argc, char **argv) {
 		glutSetKeyRepeat(GLUT_KEY_REPEAT_OFF);
 		glutKeyboardFunc(onKeyDown);
 		glutKeyboardUpFunc(onKeyUp);
-		glutMotionFunc(onMouseMotion);
+		//glutMotionFunc(onMouseMotion);
 		glutMainLoop();
 	}
 

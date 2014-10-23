@@ -22,14 +22,12 @@ vechnd vm_mat2vec(mathnd mat){
 	obj_assert(mat, nullptr);
 
 	if (mat_rows(mat) != 1) {
-		push_error_info(VM_BAD_SIZE, "Amount of rows in input matrix must be equal 1");
+		push_error_info(VM_BAD_SIZE, "Amount of cols in input matrix must be equal 1");
 		return nullptr;
 	}
 
 	vechnd out_vec = vec_create(mat_cols(mat));
-
 	mat_elem_t *elems = mat_get_elems(mat);
-
 	vec_set_elems(out_vec, elems);
 
 	return out_vec;
@@ -49,13 +47,13 @@ vechnd vm_mat_vec_mul(mathnd mat, vechnd vec){
 	obj_assert(mat, nullptr);
 	obj_assert(vec, nullptr);
 
-	if (mat_cols(mat) != vec_size(vec)) {
+	if (mat_rows(mat) != vec_size(vec)) {
 		push_error(VM_DIFF_SIZE);
 		return nullptr;
 	}
 
 	mathnd temp_mat = vm_vec2mat(vec);
-	mathnd res_mat = mat_mul(mat, temp_mat);
+	mathnd res_mat = mat_mul(temp_mat, mat);
 	vechnd out_vec = vm_mat2vec(res_mat);
 
 	mat_destroy(&temp_mat);
