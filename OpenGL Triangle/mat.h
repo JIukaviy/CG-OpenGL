@@ -26,6 +26,7 @@ mathnd mat_sub(mathnd a, mathnd b);
 mathnd mat_mul(mathnd a, mathnd b);
 mathnd mat_muls(mathnd a, mathnd b);
 mathnd mat_mul(mathnd a, mat_elem_t);
+mathnd mat_create_minor(mathnd a, int col, int row);
 //mat_err_code mat_mulv();
 mat_elem_t mat_det(mathnd hnd);  //Определитель
 mathnd mat_invert(mathnd hnd);    //Инвертирование 

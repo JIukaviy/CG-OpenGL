@@ -1,4 +1,4 @@
-#define GLEW_STATIC
+ï»¿#define GLEW_STATIC
 #include <GL\glew.h>
 #include <GL\freeglut.h>
 #include "gc.h"
@@ -16,11 +16,14 @@ bool keys[256];
 GLuint program;
 GLint attribute_coord3d;
 GLint attribute_v_color;
+GLint attribute_v_normal;
 GLint uniform_fade;
 GLint uniform_mvp;
-GLuint vbo_triangle_vertices;
-GLuint vbo_triangle_colors;
-GLuint ibo_triangle_elements;
+GLint uniform_rotate;
+GLuint vbo_obj_vertices;
+GLuint vbo_obj_normals;
+GLuint vbo_obj_colors;
+GLuint ibo_obj_elements;
 GLuint vao_id;
 
 const int MAX_FILE_SIZE = 500;
@@ -80,6 +83,24 @@ int create_shader(char* file_name, GLenum shader_type) {
 	return res;
 }
 
+int get_attrib_location(const char* attrib_name, GLint* attrib) {
+	*attrib = glGetAttribLocation(program, attrib_name);
+	if (*attrib == -1) {
+		cout << "Could not bind attribute " << attrib_name << endl;
+		return 1;
+	}
+	return 0;
+}
+
+int get_uniform_location(const char* uniform_name, GLint* uniform) {
+	*uniform = glGetUniformLocation(program, uniform_name);
+	if (*uniform == -1) {
+		cout << "Could not bind uniform " << uniform_name << endl;
+		return 1;
+	}
+	return 0;
+}
+
 int init_resources() {
 	GLint link_ok = GL_FALSE;
 	GLint compile_ok = GL_FALSE;
@@ -88,20 +109,20 @@ int init_resources() {
 
 	memset(&keys, 0, sizeof(keys));
 
-	// Êîìïèëèðóåì âåðøèííûé øåéäåð
+	// ÐšÐ¾Ð¼Ð¿Ð¸Ð»Ð¸Ñ€ÑƒÐµÐ¼ Ð²ÐµÑ€ÑˆÐ¸Ð½Ð½Ñ‹Ð¹ ÑˆÐµÐ¹Ð´ÐµÑ€
 	
 	GLuint vs;
 	
 	if (!(vs = create_shader("vertex_shader.dat", GL_VERTEX_SHADER)))
 		return 1;
 
-	//Êîìïèëèðóåì ôðàãìåíòíûé øåéäåð
+	//ÐšÐ¾Ð¼Ð¿Ð¸Ð»Ð¸Ñ€ÑƒÐµÐ¼ Ñ„Ñ€Ð°Ð³Ð¼ÐµÐ½Ñ‚Ð½Ñ‹Ð¹ ÑˆÐµÐ¹Ð´ÐµÑ€
 
 	GLuint fs;
 	if (!(fs = create_shader("fragment_shader.dat", GL_FRAGMENT_SHADER)))
 		return 1;
 
-	//Ñîçäàåì ïðîãðàììó è ëèíêóåì øåéäåðû
+	//Ð¡Ð¾Ð·Ð´Ð°ÐµÐ¼ Ð¿Ñ€Ð¾Ð³Ñ€Ð°Ð¼Ð¼Ñƒ Ð¸ Ð»Ð¸Ð½ÐºÑƒÐµÐ¼ ÑˆÐµÐ¹Ð´ÐµÑ€Ñ‹
 
 	program = glCreateProgram();
 	glAttachShader(program, vs);
@@ -115,85 +136,164 @@ int init_resources() {
 	}
 	glUseProgram(program);
 
-	//Ñîçäàíèå VBO
+	//Ð¡Ð¾Ð·Ð´Ð°Ð½Ð¸Ðµ VBO
 
-	GLfloat triangle_vertices[] = {
-		0.0, 0.5, 0.0,
-		-0.5, -0.5, 0.5,
-		0.5, -0.5, 0.5,
-		0.0, -0.5, -0.5
+	GLfloat obj_vertices[] = {
+		// front
+		-1.0, -1.0, 1.0,
+		1.0, -1.0, 1.0,
+		1.0, 1.0, 1.0,
+		-1.0, 1.0, 1.0,
+		// top
+		-1.0, 1.0, 1.0,
+		1.0, 1.0, 1.0,
+		1.0, 1.0, -1.0,
+		-1.0, 1.0, -1.0,
+		// back
+		1.0, -1.0, -1.0,
+		-1.0, -1.0, -1.0,
+		-1.0, 1.0, -1.0,
+		1.0, 1.0, -1.0,
+		// bottom
+		-1.0, -1.0, -1.0,
+		1.0, -1.0, -1.0,
+		1.0, -1.0, 1.0,
+		-1.0, -1.0, 1.0,
+		// left
+		-1.0, -1.0, -1.0,
+		-1.0, -1.0, 1.0,
+		-1.0, 1.0, 1.0,
+		-1.0, 1.0, -1.0,
+		// right
+		1.0, -1.0, 1.0,
+		1.0, -1.0, -1.0,
+		1.0, 1.0, -1.0,
+		1.0, 1.0, 1.0,
 	};
 
-	glGenBuffers(1, &vbo_triangle_vertices);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_triangle_vertices);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(triangle_vertices), triangle_vertices, GL_STATIC_DRAW);
+	glGenBuffers(1, &vbo_obj_vertices);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_vertices);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(obj_vertices), obj_vertices, GL_STATIC_DRAW);
 
-	GLfloat triangle_colors[] = {
-		1.0, 1.0, 0.0,
+	GLfloat obj_normals[] = {
+		// front
 		0.0, 0.0, 1.0,
+		0.0, 0.0, 1.0,
+		0.0, 0.0, 1.0,
+		0.0, 0.0, 1.0,
+		// top
+		0.0, 1.0, 0.0,
+		0.0, 1.0, 0.0,
+		0.0, 1.0, 0.0,
+		0.0, 1.0, 0.0,
+		// back
+		0.0, 0.0, -1.0,
+		0.0, 0.0, -1.0,
+		0.0, 0.0, -1.0,
+		0.0, 0.0, -1.0,
+		// bottom
+		0.0, -1.0, 0.0,
+		0.0, -1.0, 0.0,
+		0.0, -1.0, 0.0,
+		0.0, -1.0, 0.0,
+		// left
+		-1.0, 0.0, 0.0,
+		-1.0, 0.0, 0.0,
+		-1.0, 0.0, 0.0,
+		-1.0, 0.0, 0.0,
+		// right
 		1.0, 0.0, 0.0,
-		1.0, 1.0, 1.0
+		1.0, 0.0, 0.0,
+		1.0, 0.0, 0.0,
+		1.0, 0.0, 0.0,
 	};
 
-	glGenBuffers(1, &vbo_triangle_colors);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_triangle_colors);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(triangle_colors), triangle_colors, GL_STATIC_DRAW);
+	glGenBuffers(1, &vbo_obj_normals);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_normals);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(obj_normals), obj_normals, GL_STATIC_DRAW);
+	
+	GLfloat obj_colors[] = {
+		1.0, 1.0, 0.0,
+		1.0, 1.0, 0.0,
+		1.0, 1.0, 0.0,
+		1.0, 1.0, 0.0,
 
-	//Ñîçäàíèå IBO
+		0.0, 0.0, 1.0,
+		0.0, 0.0, 1.0,
+		0.0, 0.0, 1.0,
+		0.0, 0.0, 1.0,
 
-	GLushort triangle_elements[] = {
+		1.0, 0.0, 0.0,
+		1.0, 0.0, 0.0,
+		1.0, 0.0, 0.0,
+		1.0, 0.0, 0.0,
+
+		0.0, 1.0, 0.0,
+		0.0, 1.0, 0.0,
+		0.0, 1.0, 0.0,
+		0.0, 1.0, 0.0,
+
+		0.0, 1.0, 1.0,
+		0.0, 1.0, 1.0,
+		0.0, 1.0, 1.0,
+		0.0, 1.0, 1.0,
+
+		1.0, 0.0, 1.0,
+		1.0, 0.0, 1.0,
+		1.0, 0.0, 1.0,
+		1.0, 0.0, 1.0
+	};
+
+	glGenBuffers(1, &vbo_obj_colors);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_colors);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(obj_colors), obj_colors, GL_STATIC_DRAW);
+
+	//Ð¡Ð¾Ð·Ð´Ð°Ð½Ð¸Ðµ IBO
+
+	GLushort obj_elements[] = {
+		// front
 		0, 1, 2,
-		0, 1, 3,
-		0, 2, 3,
-		1, 2, 3
+		2, 3, 0,
+		// top
+		4, 5, 6,
+		6, 7, 4,
+		// back
+		8, 9, 10,
+		10, 11, 8,
+		// bottom
+		12, 13, 14,
+		14, 15, 12,
+		// left
+		16, 17, 18,
+		18, 19, 16,
+		// right
+		20, 21, 22,
+		22, 23, 20
 	};
 
-	glGenBuffers(1, &ibo_triangle_elements);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_triangle_elements);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(triangle_elements), triangle_elements, GL_STATIC_DRAW);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glGenBuffers(1, &ibo_obj_elements);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_obj_elements);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(obj_elements), obj_elements, GL_STATIC_DRAW);
 
-	//Ñîçäàíèå VAO
+	//Ð¡Ð¾Ð·Ð´Ð°Ð½Ð¸Ðµ VAO
 	glGenVertexArrays(1, &vao_id);
 	glBindVertexArray(vao_id);
 
-	//Ïîëó÷åíèå óêàçàòåëÿ íà ïåðåìåííûå
+	//ÐŸÐ¾Ð»ÑƒÑ‡ÐµÐ½Ð¸Ðµ ÑƒÐºÐ°Ð·Ð°Ñ‚ÐµÐ»Ñ Ð½Ð° Ð¿ÐµÑ€ÐµÐ¼ÐµÐ½Ð½Ñ‹Ðµ
 
-	const char* attribute_name = "coord3d";
-	attribute_coord3d = glGetAttribLocation(program, attribute_name);
-	if (attribute_coord3d == -1) {
-		cout << "Could not bind attribute " << attribute_name << endl;
-		return 1;
-	}
-
-	attribute_name = "v_color";
-	attribute_v_color = glGetAttribLocation(program, attribute_name);
-	if (attribute_v_color == -1) {
-		fprintf(stderr, "Could not bind attribute %s\n", attribute_name);
-		return 1;
-	}
-
-	const char* uniform_name = "fade";
-	uniform_fade = glGetUniformLocation(program, uniform_name);
-	if (uniform_fade == -1) {
-		fprintf(stderr, "Could not bind uniform %s\n", uniform_name);
-		return 1;
-	}
-
-	uniform_name = "mvp";
-	uniform_mvp = glGetUniformLocation(program, uniform_name);
-	if (uniform_mvp == -1) {
-		fprintf(stderr, "Could not bind uniform %s\n", uniform_name);
-		return 0;
-	}
+	if (get_attrib_location("coord3d", &attribute_coord3d)) return 1;
+	if (get_attrib_location("v_normal", &attribute_v_normal)) return 1;
+	if (get_attrib_location("v_color", &attribute_v_color)) return 1;
+	if (get_uniform_location("mvp", &uniform_mvp)) return 1;
+	if (get_uniform_location("rotate", &uniform_rotate)) return 1;
 
 	return 0;
 }
 
 void free_resources() {
 	glDeleteProgram(program);
-	glDeleteBuffers(1, &vbo_triangle_vertices);
-	glDeleteBuffers(1, &vbo_triangle_colors);
+	glDeleteBuffers(1, &vbo_obj_vertices);
+	glDeleteBuffers(1, &vbo_obj_colors);
 }
 
 void Display() {
@@ -201,31 +301,35 @@ void Display() {
 
 	glUseProgram(program);
 	glEnableVertexAttribArray(attribute_coord3d);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_triangle_vertices);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_vertices);
 	glVertexAttribPointer(attribute_coord3d, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
+	glEnableVertexAttribArray(attribute_v_normal);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_normals);
+	glVertexAttribPointer(attribute_v_normal, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
 	glEnableVertexAttribArray(attribute_v_color);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_triangle_colors);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_colors);
 	glVertexAttribPointer(attribute_v_color, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
 	int size;
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_triangle_elements);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_obj_elements);
 	glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
 	glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
 
 	glDisableVertexAttribArray(attribute_coord3d);
+	glDisableVertexAttribArray(attribute_v_normal);
 	glDisableVertexAttribArray(attribute_v_color);
 
 	glutSwapBuffers();
 }
 
-void onKeyDown(unsigned char key, int x, int y){
+void onKeyDown(unsigned char key, int x, int y) {
 	keys[key] = true;
 }
-void onKeyUp(unsigned char key, int x, int y){
+void onKeyUp(unsigned char key, int x, int y) {
 	keys[key] = false;
 }
-
 
 vechnd cam_pos;
 vechnd world_cam_target;
@@ -242,7 +346,7 @@ void idle(){
 
 	start_garbage_collect(1);
 
-	mat_elem_t d = 1 * (time - prev_time) / 100;
+	mat_elem_t d = 1 * (time - prev_time) / 200;
 
 	if (keys['g'])  cam_x -= d / 5;
 	if (keys['j'])  cam_x += d / 5;
@@ -254,8 +358,8 @@ void idle(){
 	vechnd cam_target = vec_create(3);
 
 	mathnd rotate_cam = mat_mul(mat_rotate_mat4(cam_y, MAT_X), mat_rotate_mat4(cam_x, MAT_Y));
-	vechnd cam_direction = vec_normalize(vm_mat_vec_mul(rotate_cam, vec_create4(0, 0, 1, 0)));
-	cam_direction = vec_create3(vec_get_elem(cam_direction, 0), vec_get_elem(cam_direction, 1), vec_get_elem(cam_direction, 2));
+	vechnd cam_direction = vm_mat_vec_mul(rotate_cam, vec_create4(0, 0, 1, 0));
+	cam_direction = vec_normalize(vec_convert(cam_direction, 3));
 
 	vechnd forward_direction = cam_direction;
 	vechnd bacward_direction = vec_invert(cam_direction);
@@ -274,15 +378,16 @@ void idle(){
 	vec_copy(cam_pos, t_cam_pos);
 	vec_copy(cam_up, up_direction);
 
-	vechnd triangle_pos = vec_create3(0, 0, -4);
+	vechnd obj_pos = vec_create3(0, 0, -7);
 
 	mathnd scale = mat_scale(1.5);
-	mathnd rotate = mat_rotate_mat4(0, MAT_Y);
-	mathnd translate = vm_mat_translate(triangle_pos);
+	mathnd rotate = mat_rotate_mat4(angle, MAT_Y);
+	rotate = mat_mul(rotate, mat_rotate_mat4(angle, MAT_Z));
+	mathnd translate = vm_mat_translate(obj_pos);
 
 	mathnd model = mat_mul(translate, mat_mul(rotate, scale));
 	//mathnd view = vm_mat_look_at(cam_pos, vec_pos_anim, cam_up);
-
+	
 	mathnd view = mat_mul(rotate_cam, vm_mat_translate(vec_invert(cam_pos)));
 	//mathnd view = vm_mat_translate(vec_invert(cam_pos));
 	mathnd projection = mat_perspective_projection(45.0, 1.0 * screen_width / screen_height, 0.1, 100.0);
@@ -293,8 +398,10 @@ void idle(){
 		vme_print_errors();
 		glutIdleFunc(nullptr);
 	}
-	else
+	else {
 		glUniformMatrix4fv(uniform_mvp, 1, GL_TRUE, mat_get_elems(mvp));
+		glUniformMatrix3fv(uniform_rotate, 1, GL_TRUE, mat_get_elems(mat_create_minor(rotate, 3, 3)));
+	}
 
 	erase_collected_garbage(1);
 
@@ -347,7 +454,7 @@ int main(int argc, char **argv) {
 	glutInitContextVersion(3, 1);
 	glutInitContextProfile(GLUT_CORE_PROFILE);
 
-	glutCreateWindow("Test");
+	glutCreateWindow("OpenGL Cube");
 	
 	glClearColor(0.0, 0.0, 0.0, 1.0);
 	
@@ -362,7 +469,6 @@ int main(int argc, char **argv) {
 
 	cam_pos = vec_create(3);
 	world_cam_target = vec_create(3);
-
 
 	if (!init_resources()) {
 		glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_CONTINUE_EXECUTION);

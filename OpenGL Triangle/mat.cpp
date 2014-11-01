@@ -326,8 +326,12 @@ mathnd mat_mul(mathnd a, mathnd b){
 
 mathnd mat_create_minor(mathnd a, int col, int row){
 	mat_assert(a, nullptr);
-
 	mat_t *t = hnd2mat(a);
+
+	if (t->cols - 1 < col || t->rows - 1 < row) {
+		push_error(MAT_ERR_OUT_OF_BOUNDS);
+		return nullptr;
+	}
 	
 	mat_create_out(t->cols - 1, t->rows - 1);
 
@@ -341,6 +345,7 @@ mathnd mat_create_minor(mathnd a, int col, int row){
 			x++;
 		}
 		y++;
+		x = 0;
 	}
 
 	return out_hnd;

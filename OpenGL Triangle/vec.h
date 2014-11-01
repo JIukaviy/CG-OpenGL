@@ -9,6 +9,7 @@ vechnd vec_create(int size);
 vechnd vec_create3(vec_elem_t x, vec_elem_t y, vec_elem_t z);
 vechnd vec_create4(vec_elem_t x, vec_elem_t y, vec_elem_t z, vec_elem_t w);
 void vec_destroy(vechnd*);  //
+vechnd vec_convert(vechnd hnd, int size);
 vechnd vec_add(vechnd a, vechnd b);
 vechnd vec_sub(vechnd a, vechnd b);
 vechnd vec_mul(vechnd a, vechnd b);

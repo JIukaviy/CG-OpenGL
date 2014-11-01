@@ -87,6 +87,22 @@ vechnd vec_create4(vechnd vec3, vec_elem_t w){
 	return out_hnd;
 }
 
+vechnd vec_convert(vechnd hnd, int size){
+	vec_assert_1(hnd, nullptr);
+	vec_t *t = hnd2vec(hnd);
+
+	if (size < 1 || size > t->size) {
+		push_error(VEC_ERR_BAD_SIZE);
+		return nullptr;
+	}
+
+	vec_create_out(size);
+
+	memcpy(out->data, t->data, size*sizeof(vec_elem_t));
+
+	return out_hnd;
+}
+
 void vec_destroy(vechnd* hnd){
 	vec_t* t = hnd2vec(*hnd);
 	if (!hnd || !*hnd)
