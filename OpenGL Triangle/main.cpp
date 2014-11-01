@@ -4,6 +4,7 @@
 #include "gc.h"
 #include "vec_mat.h"
 #include "vec_mat_errors.h"
+#include "objloader.h"
 #include <iostream>
 #include <fstream>
 
@@ -138,142 +139,37 @@ int init_resources() {
 
 	//Создание VBO
 
-	GLfloat obj_vertices[] = {
-		// front
-		-1.0, -1.0, 1.0,
-		1.0, -1.0, 1.0,
-		1.0, 1.0, 1.0,
-		-1.0, 1.0, 1.0,
-		// top
-		-1.0, 1.0, 1.0,
-		1.0, 1.0, 1.0,
-		1.0, 1.0, -1.0,
-		-1.0, 1.0, -1.0,
-		// back
-		1.0, -1.0, -1.0,
-		-1.0, -1.0, -1.0,
-		-1.0, 1.0, -1.0,
-		1.0, 1.0, -1.0,
-		// bottom
-		-1.0, -1.0, -1.0,
-		1.0, -1.0, -1.0,
-		1.0, -1.0, 1.0,
-		-1.0, -1.0, 1.0,
-		// left
-		-1.0, -1.0, -1.0,
-		-1.0, -1.0, 1.0,
-		-1.0, 1.0, 1.0,
-		-1.0, 1.0, -1.0,
-		// right
-		1.0, -1.0, 1.0,
-		1.0, -1.0, -1.0,
-		1.0, 1.0, -1.0,
-		1.0, 1.0, 1.0,
-	};
+	GLfloat* obj_vertices;
+	GLfloat* obj_normals;
+	GLushort* obj_elements;
+	int vert_size;
+	int norm_size;
+	int elem_size;
+
+	objlodaer_load_file("models/teapot.obj", &obj_vertices, &vert_size, &obj_normals, &norm_size, &obj_elements, &elem_size);
+
+	if (vme_error_appear()) {
+		vme_print_errors();
+		return 1;
+	}
 
 	glGenBuffers(1, &vbo_obj_vertices);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_vertices);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(obj_vertices), obj_vertices, GL_STATIC_DRAW);
-
-	GLfloat obj_normals[] = {
-		// front
-		0.0, 0.0, 1.0,
-		0.0, 0.0, 1.0,
-		0.0, 0.0, 1.0,
-		0.0, 0.0, 1.0,
-		// top
-		0.0, 1.0, 0.0,
-		0.0, 1.0, 0.0,
-		0.0, 1.0, 0.0,
-		0.0, 1.0, 0.0,
-		// back
-		0.0, 0.0, -1.0,
-		0.0, 0.0, -1.0,
-		0.0, 0.0, -1.0,
-		0.0, 0.0, -1.0,
-		// bottom
-		0.0, -1.0, 0.0,
-		0.0, -1.0, 0.0,
-		0.0, -1.0, 0.0,
-		0.0, -1.0, 0.0,
-		// left
-		-1.0, 0.0, 0.0,
-		-1.0, 0.0, 0.0,
-		-1.0, 0.0, 0.0,
-		-1.0, 0.0, 0.0,
-		// right
-		1.0, 0.0, 0.0,
-		1.0, 0.0, 0.0,
-		1.0, 0.0, 0.0,
-		1.0, 0.0, 0.0,
-	};
+	glBufferData(GL_ARRAY_BUFFER, vert_size*sizeof(GLfloat), obj_vertices, GL_STATIC_DRAW);
 
 	glGenBuffers(1, &vbo_obj_normals);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_normals);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(obj_normals), obj_normals, GL_STATIC_DRAW);
-	
-	GLfloat obj_colors[] = {
-		1.0, 1.0, 0.0,
-		1.0, 1.0, 0.0,
-		1.0, 1.0, 0.0,
-		1.0, 1.0, 0.0,
-
-		0.0, 0.0, 1.0,
-		0.0, 0.0, 1.0,
-		0.0, 0.0, 1.0,
-		0.0, 0.0, 1.0,
-
-		1.0, 0.0, 0.0,
-		1.0, 0.0, 0.0,
-		1.0, 0.0, 0.0,
-		1.0, 0.0, 0.0,
-
-		0.0, 1.0, 0.0,
-		0.0, 1.0, 0.0,
-		0.0, 1.0, 0.0,
-		0.0, 1.0, 0.0,
-
-		0.0, 1.0, 1.0,
-		0.0, 1.0, 1.0,
-		0.0, 1.0, 1.0,
-		0.0, 1.0, 1.0,
-
-		1.0, 0.0, 1.0,
-		1.0, 0.0, 1.0,
-		1.0, 0.0, 1.0,
-		1.0, 0.0, 1.0
-	};
-
-	glGenBuffers(1, &vbo_obj_colors);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_colors);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(obj_colors), obj_colors, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, norm_size*sizeof(GLfloat), obj_normals, GL_STATIC_DRAW);
 
 	//Создание IBO
 
-	GLushort obj_elements[] = {
-		// front
-		0, 1, 2,
-		2, 3, 0,
-		// top
-		4, 5, 6,
-		6, 7, 4,
-		// back
-		8, 9, 10,
-		10, 11, 8,
-		// bottom
-		12, 13, 14,
-		14, 15, 12,
-		// left
-		16, 17, 18,
-		18, 19, 16,
-		// right
-		20, 21, 22,
-		22, 23, 20
-	};
-
 	glGenBuffers(1, &ibo_obj_elements);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_obj_elements);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(obj_elements), obj_elements, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, elem_size*sizeof(GLushort), obj_elements, GL_STATIC_DRAW);
+
+	delete obj_vertices;
+	delete obj_normals;
+	delete obj_elements;
 
 	//Создание VAO
 	glGenVertexArrays(1, &vao_id);
@@ -283,7 +179,6 @@ int init_resources() {
 
 	if (get_attrib_location("coord3d", &attribute_coord3d)) return 1;
 	if (get_attrib_location("v_normal", &attribute_v_normal)) return 1;
-	if (get_attrib_location("v_color", &attribute_v_color)) return 1;
 	if (get_uniform_location("mvp", &uniform_mvp)) return 1;
 	if (get_uniform_location("rotate", &uniform_rotate)) return 1;
 
@@ -308,10 +203,6 @@ void Display() {
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_normals);
 	glVertexAttribPointer(attribute_v_normal, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
-	glEnableVertexAttribArray(attribute_v_color);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_colors);
-	glVertexAttribPointer(attribute_v_color, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
 	int size;
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_obj_elements);
 	glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
@@ -319,7 +210,6 @@ void Display() {
 
 	glDisableVertexAttribArray(attribute_coord3d);
 	glDisableVertexAttribArray(attribute_v_normal);
-	glDisableVertexAttribArray(attribute_v_color);
 
 	glutSwapBuffers();
 }
@@ -382,7 +272,8 @@ void idle(){
 
 	mathnd scale = mat_scale(1.5);
 	mathnd rotate = mat_rotate_mat4(angle, MAT_Y);
-	rotate = mat_mul(rotate, mat_rotate_mat4(angle, MAT_Z));
+	//rotate = mat_mul(rotate, mat_rotate_mat4(angle, MAT_Y));
+	//rotate = mat_mul(rotate, mat_rotate_mat4(angle, MAT_X));
 	mathnd translate = vm_mat_translate(obj_pos);
 
 	mathnd model = mat_mul(translate, mat_mul(rotate, scale));
@@ -447,6 +338,8 @@ int main(int argc, char **argv) {
 	vm_init();
 	vme_init();
 	gc_init();
+	objlodaer_init();
+
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_ALPHA | GLUT_DOUBLE | GLUT_DEPTH);
 	glutInitWindowSize(500, 500);
@@ -456,7 +349,7 @@ int main(int argc, char **argv) {
 
 	glutCreateWindow("OpenGL Cube");
 	
-	glClearColor(0.0, 0.0, 0.0, 1.0);
+	glClearColor(1.0, 1.0, 1.0, 1.0);
 	
 	glewExperimental = true;
 	GLenum glew_status = glewInit();

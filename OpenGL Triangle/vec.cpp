@@ -64,6 +64,16 @@ vechnd vec_create3(vec_elem_t x, vec_elem_t y, vec_elem_t z){
 	return out_hnd;
 }
 
+vechnd vec_create3(vec_elem_t* elems) {
+	vec_create_out(3);
+	if (!elems) {
+		push_error(VEC_ERR_NULL_IN_DATA);
+		return nullptr;
+	}
+	vec_set_elems(out_hnd, elems);
+	return out_hnd;
+}
+
 vechnd vec_create4(vec_elem_t x, vec_elem_t y, vec_elem_t z, vec_elem_t w){
 	vec_create_out(4);
 

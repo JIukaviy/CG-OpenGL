@@ -15,7 +15,7 @@ typedef int vme_int;
 void vme_init();
 vme_int vme_register_unit(char* unit_name);
 vme_int vme_register_error_type(vme_int unit_id, char* error_info);
-vme_error vme_push_error(vme_int error_type_id, char* func_name, int line, char* error_info);
+vme_error vme_push_error(vme_int error_type_id, char* func_name, int line, const char* error_info);
 errhnd vme_get_last_err();
 errhnd vme_get_last_err(vme_int unit_id);
 void vme_print_errors();

@@ -1,6 +1,5 @@
 #version 330 
 attribute vec3 coord3d; 
-attribute vec3 v_color;
 attribute vec3 v_normal;
 varying vec3 f_color;
 uniform mat4 mvp;
@@ -21,12 +20,13 @@ struct material{
 };
 
 material mymaterial = material(vec4(1.0, 0.8, 0.8, 1.0));
+vec3 ambient = vec3(0.1, 0.1, 0.1);
 
 void main(void){
   vec3 normalDirection = normalize(v_normal * rotate);
   vec3 lightDirection = normalize(vec3(light0.position));
  
-  vec3 diffuseReflection = vec3(light0.diffuse) * v_color * max(0.0, dot(normalDirection, lightDirection));
+  vec3 diffuseReflection = vec3(mymaterial.diffuse) * (ambient + vec3(light0.diffuse) * max(0.0, dot(normalDirection, lightDirection)));
  
   f_color = diffuseReflection;
   gl_Position = mvp * vec4(coord3d, 1.0);

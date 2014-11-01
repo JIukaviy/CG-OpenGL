@@ -102,7 +102,7 @@ vme_int vme_register_error_type(vme_int unit_id, char* error_info){
 	return error_type_count++;
 }
 
-vme_error vme_push_error(vme_int error_type_id, char* func_name, int line, char* error_info){
+vme_error vme_push_error(vme_int error_type_id, char* func_name, int line, const char* error_info){
 	if (error_type_id < 0 || error_type_id > error_type_count)
 		return VME_ERROR_TYPE_IS_UNREGISTERED;
 
