@@ -87,17 +87,41 @@ void objlodaer_load_file(const char* file_name, GLfloat** a_vertices, int* vert_
 		else if (line[0] == '#') { /* ignoring this line */ } else { /* ignoring this line */ }
 	}
 
+#define vec2vechnd(vec) vec_create3((vec_elem_t*)&(vec))
+#define vechnd2vec3(hnd) *((vec3*)vec_get_elems(hnd))
+
+	vector<GLfloat> nb_seen;
 	normals.resize(vertices.size());
+	nb_seen.resize(vertices.size(), 0);
 	for (int i = 0; i < elements.size(); i += 3) {
 		GLushort ia = elements[i];
 		GLushort ib = elements[i + 1];
 		GLushort ic = elements[i + 2];
 		start_garbage_collect(1);
-		vechnd normal = vec_normalize(vec_cross(vec_sub(vec_create3((vec_elem_t*)&vertices[ib]), vec_create3((vec_elem_t*)&vertices[ia])),
-			vec_sub(vec_create3((vec_elem_t*)&vertices[ic]), vec_create3((vec_elem_t*)&vertices[ia]))));
+		vechnd normal = vec_normalize(vec_cross(vec_sub(vec2vechnd(vertices[ib]), vec2vechnd(vertices[ia])),
+												vec_sub(vec2vechnd(vertices[ic]), vec2vechnd(vertices[ia]))));
 		normals[ia] = normals[ib] = normals[ic] = *((vec3*)vec_get_elems(normal));
+
+		int v[3];  v[0] = ia;  v[1] = ib;  v[2] = ic;
+		for (int j = 0; j < 3; j++) {
+			GLushort cur_v = v[j];
+			nb_seen[cur_v]++;
+			if (nb_seen[cur_v] == 1) {
+				normals[cur_v] = vechnd2vec3(normal);
+			} else {
+				// average
+				vechnd vec = vec_create3((vec_elem_t*)&(normals[cur_v]));
+				vec = vec_mul(vec, (1.0 - 1.0 / nb_seen[cur_v]));
+				vec = vec_add(vec, vec_div(normal, nb_seen[cur_v]));
+				normals[cur_v] = vechnd2vec3(vec_normalize(vec));
+			}
+		}
+
 		erase_collected_garbage(1);
 	}
+
+#undef vec2vechnd
+#undef vechnd2vec3
 
 	*vert_size = vertices.size() * 3;
 	*normals_size = normals.size() * 3;

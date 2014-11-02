@@ -13,6 +13,7 @@ typedef void* mathnd;
 
 void mat_init();
 mathnd mat_create(int rows, int cols);
+mathnd mat_create_e(int n);
 mathnd mat_rotate_mat2(mat_elem_t angle);
 mathnd mat_rotate_mat3(mat_elem_t angle, mat_axis axis);
 mathnd mat_rotate_mat4(mat_elem_t angle, mat_axis axis);

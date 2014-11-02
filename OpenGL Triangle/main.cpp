@@ -21,6 +21,8 @@ GLint attribute_v_normal;
 GLint uniform_fade;
 GLint uniform_mvp;
 GLint uniform_rotate;
+GLint uniform_rotate_cam;
+GLint uniform_model;
 GLuint vbo_obj_vertices;
 GLuint vbo_obj_normals;
 GLuint vbo_obj_colors;
@@ -58,7 +60,7 @@ int create_shader(char* file_name, GLenum shader_type) {
 	GLint compile_ok = GL_FALSE;
 
 	ifstream fin(file_name);
-	if (!fin.is_open()) {
+	if (!fin) {
 		cout << "Can't open file: " << file_name << endl;
 		return 0;
 	}
@@ -114,13 +116,13 @@ int init_resources() {
 	
 	GLuint vs;
 	
-	if (!(vs = create_shader("vertex_shader.dat", GL_VERTEX_SHADER)))
+	if (!(vs = create_shader("shaders/vertex_shader_spot_lighting_specular.dat", GL_VERTEX_SHADER)))
 		return 1;
 
 	//Компилируем фрагментный шейдер
 
 	GLuint fs;
-	if (!(fs = create_shader("fragment_shader.dat", GL_FRAGMENT_SHADER)))
+	if (!(fs = create_shader("shaders/fragment_shader.dat", GL_FRAGMENT_SHADER)))
 		return 1;
 
 	//Создаем программу и линкуем шейдеры
@@ -181,6 +183,8 @@ int init_resources() {
 	if (get_attrib_location("v_normal", &attribute_v_normal)) return 1;
 	if (get_uniform_location("mvp", &uniform_mvp)) return 1;
 	if (get_uniform_location("rotate", &uniform_rotate)) return 1;
+	if (get_uniform_location("rotate_cam", &uniform_rotate_cam)) return 1;
+	if (get_uniform_location("model", &uniform_model)) return 1;
 
 	return 0;
 }
@@ -268,12 +272,10 @@ void idle(){
 	vec_copy(cam_pos, t_cam_pos);
 	vec_copy(cam_up, up_direction);
 
-	vechnd obj_pos = vec_create3(0, 0, -7);
+	vechnd obj_pos = vec_create3(0, 0, move - 3);
 
-	mathnd scale = mat_scale(1.5);
+	mathnd scale = mat_scale(1.0);
 	mathnd rotate = mat_rotate_mat4(angle, MAT_Y);
-	//rotate = mat_mul(rotate, mat_rotate_mat4(angle, MAT_Y));
-	//rotate = mat_mul(rotate, mat_rotate_mat4(angle, MAT_X));
 	mathnd translate = vm_mat_translate(obj_pos);
 
 	mathnd model = mat_mul(translate, mat_mul(rotate, scale));
@@ -291,6 +293,8 @@ void idle(){
 	}
 	else {
 		glUniformMatrix4fv(uniform_mvp, 1, GL_TRUE, mat_get_elems(mvp));
+		glUniformMatrix4fv(uniform_model, 1, GL_TRUE, mat_get_elems(model));
+		glUniformMatrix4fv(uniform_rotate_cam, 1, GL_TRUE, mat_get_elems(rotate_cam));
 		glUniformMatrix3fv(uniform_rotate, 1, GL_TRUE, mat_get_elems(mat_create_minor(rotate, 3, 3)));
 	}
 
@@ -347,9 +351,9 @@ int main(int argc, char **argv) {
 	glutInitContextVersion(3, 1);
 	glutInitContextProfile(GLUT_CORE_PROFILE);
 
-	glutCreateWindow("OpenGL Cube");
+	glutCreateWindow("OpenGL");
 	
-	glClearColor(1.0, 1.0, 1.0, 1.0);
+	glClearColor(0.0, 0.0, 0.0, 1.0);
 	
 	glewExperimental = true;
 	GLenum glew_status = glewInit();
