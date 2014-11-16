@@ -1,6 +1,7 @@
 #version 330 
 attribute vec3 coord3d; 
 attribute vec3 v_normal;
+attribute mat4 test;
 varying vec3 f_color;
 uniform mat4 rotate_cam;
 uniform mat4 mvp;
@@ -20,7 +21,7 @@ lightSource light0 = lightSource(
     vec4(1.0, 1.0, 0.0, 1.0),
     vec4(1.0, 0.5, 1.0, 1.0),
 	vec4(1.0,  1.0,  1.0, 1.0),
-	0.0, 0.2, 0.2,
+	0.0, 0.1, 0.1,
 	30.0, 20.0,
 	vec3(-1.0, -0.5, -1.0)
 );
@@ -41,11 +42,19 @@ vec3 ambient = vec3(0.1, 0.1, 0.1);
 void main(void){
   vec3 normalDirection = normalize(v_normal * rotate);
   vec3 vertexToLight = vec3(light0.position - model * vec4(coord3d, 1.0));
+  vec3 lightDirection = normalize(vertexToLight);
   
   float distance = length(vertexToLight);
   float a = 1.0 / (light0.K1 + light0.K2 * distance + light0.K3 * distance * distance);
-  vec3 lightDirection = normalize(vertexToLight);
-  vec3 diffuseReflection = vec3(mymaterial.diffuse) * (ambient + min(a, 1.0) * vec3(light0.diffuse) * max(0.0, dot(normalDirection, lightDirection)));
+  
+  float clampedCosine = max(0.0, dot(-lightDirection, normalize(light0.spotDirection)));
+  if (clampedCosine < cos(light0.spotCutoff * 3.14159 / 180.0)) {
+	a = 0.0;
+  } else {
+    a = a * pow(clampedCosine, light0.spotExponent);
+  }
+
+  vec3 diffuseReflection = vec3(mymaterial.diffuse) * min(a, 1.0) * vec3(light0.diffuse) * max(0.0, dot(normalDirection, lightDirection));
 
   vec3 viewDirection = vec3(vec4(0, 0, 1, 0) * rotate_cam);
   vec3 specularReflection = vec3(0.0, 0.0, 0.0);
@@ -54,6 +63,6 @@ void main(void){
 			* pow(max(0.0, dot(reflect(-lightDirection, normalDirection), viewDirection)), mymaterial.shininess);
   }
  
-  f_color = diffuseReflection + specularReflection;
+  f_color = ambient * vec3(mymaterial.diffuse) + diffuseReflection + specularReflection;
   gl_Position = mvp * vec4(coord3d, 1.0);
 }

@@ -62,6 +62,13 @@ vechnd vm_mat_vec_mul(mathnd mat, vechnd vec){
 	return out_vec;
 }
 
+mathnd vm_mat_scale(vechnd vec) {
+	if (vec_size(vec) != 3)
+		push_error(VM_BAD_SIZE);
+
+	return mat_scale(vec_get_elem(vec, 0), vec_get_elem(vec, 1), vec_get_elem(vec, 2));
+}
+
 mathnd vm_mat_translate(vechnd vec){
 	obj_assert(vec, nullptr);
 
@@ -69,6 +76,13 @@ mathnd vm_mat_translate(vechnd vec){
 		push_error_info(VM_BAD_SIZE, "Vectors for translate matrix must be size 3");
 	
 	return mat_translate(vec_get_elem(vec, 0), vec_get_elem(vec, 1), vec_get_elem(vec, 2));
+}
+
+mathnd vm_mat_rotate_mat4(vechnd vec) {
+	if (vec_size(vec) != 3)
+		push_error(VM_BAD_SIZE);
+
+	return mat_rotate_mat4(vec_get_elem(vec, 0), vec_get_elem(vec, 1), vec_get_elem(vec, 2));
 }
 
 mathnd vm_mat_look_at(vechnd cam_pos, vechnd cam_target, vechnd cam_up){

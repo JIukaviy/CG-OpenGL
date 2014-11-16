@@ -64,6 +64,10 @@ vechnd vec_create3(vec_elem_t x, vec_elem_t y, vec_elem_t z){
 	return out_hnd;
 }
 
+vechnd vec_create3(vec_elem_t coord) {
+	return vec_create3(coord, coord, coord);
+}
+
 vechnd vec_create3(vec_elem_t* elems) {
 	vec_create_out(3);
 	if (!elems) {
@@ -118,11 +122,20 @@ void vec_destroy(vechnd* hnd){
 	if (!hnd || !*hnd)
 		return;
 
-	gc_unregist(t->gc_id);
+	if (t->gc_id)
+		gc_unregist(t->gc_id);
 
 	delete t->data;
 	delete *hnd;
 	*hnd = nullptr;
+}
+
+void vec_gc_unregist(vechnd hnd) {
+	vec_assert_1(hnd);
+	vec_t* t = hnd2vec(hnd);
+
+	gc_unregist(t->gc_id);
+	t->gc_id = nullptr;
 }
 
 vechnd vec_on_elem(vechnd a, vechnd b, on_elem_pfunc func){

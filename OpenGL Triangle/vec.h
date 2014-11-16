@@ -1,3 +1,6 @@
+#ifndef VEC_H
+#define VEC_H
+
 #define VEC_MAX_SIZE 5
 
 typedef float vec_elem_t;
@@ -7,9 +10,11 @@ typedef void* vechnd;
 void vec_init();
 vechnd vec_create(int size);
 vechnd vec_create3(vec_elem_t x, vec_elem_t y, vec_elem_t z);
+vechnd vec_create3(vec_elem_t coord);
 vechnd vec_create3(vec_elem_t* elems);
 vechnd vec_create4(vec_elem_t x, vec_elem_t y, vec_elem_t z, vec_elem_t w);
-void vec_destroy(vechnd*);  //
+void vec_destroy(vechnd*);
+void vec_gc_unregist(vechnd hnd);
 vechnd vec_convert(vechnd hnd, int size);
 vechnd vec_add(vechnd a, vechnd b);
 vechnd vec_sub(vechnd a, vechnd b);
@@ -33,3 +38,4 @@ vechnd vec_copy(vechnd in_hnd);
 void vec_copy(vechnd dst, vechnd src);
 bool vec_equal(vechnd a, vechnd b);
 void vec_print(vechnd);
+#endif

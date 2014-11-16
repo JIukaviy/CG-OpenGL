@@ -1,3 +1,6 @@
+#ifndef MAT_H
+#define MAT_H
+
 #define MAT_MAX_ROWS 10
 #define MAT_MAX_COLS 10
 
@@ -16,12 +19,16 @@ mathnd mat_create(int rows, int cols);
 mathnd mat_create_e(int n);
 mathnd mat_rotate_mat2(mat_elem_t angle);
 mathnd mat_rotate_mat3(mat_elem_t angle, mat_axis axis);
+mathnd mat_rotate_mat3(mat_elem_t angle_x, mat_elem_t angle_y, mat_elem_t angle_z);
 mathnd mat_rotate_mat4(mat_elem_t angle, mat_axis axis);
+mathnd mat_rotate_mat4(mat_elem_t angle_x, mat_elem_t angle_y, mat_elem_t angle_z);
 mathnd mat_translate(mat_elem_t x, mat_elem_t y, mat_elem_t z);
-mathnd mat_scale(mat_elem_t q);
+mathnd mat_scale(mat_elem_t s);
+mathnd mat_scale(mat_elem_t x, mat_elem_t y, mat_elem_t z);
 mathnd mat_orthographic_projection(mat_elem_t left, mat_elem_t right, mat_elem_t bottom, mat_elem_t top, mat_elem_t near_val, mat_elem_t far_val);
 mathnd mat_perspective_projection(mat_elem_t fov, mat_elem_t ratio, mat_elem_t z_near, mat_elem_t z_far);
 void mat_destroy(mathnd*);  //
+void mat_gc_unregist(mathnd hnd);
 mathnd mat_add(mathnd a, mathnd b);
 mathnd mat_sub(mathnd a, mathnd b);
 mathnd mat_mul(mathnd a, mathnd b);
@@ -42,3 +49,4 @@ bool mat_equal(mathnd a, mathnd b);
 mathnd mat_copy(mathnd hnd);
 void mat_copy(mathnd dst, mathnd src);
 void mat_print(mathnd hnd);
+#endif

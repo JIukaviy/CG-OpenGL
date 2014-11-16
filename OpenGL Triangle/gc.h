@@ -7,8 +7,10 @@ typedef nodehnd gc_id_t;
 
 void gc_init();
 gc_id_t gc_start_collect();
+void gc_pause_collect();
+void gc_resume_collect();
 void gc_erase_collected(gc_id_t gc_id);
-gc_id_t gc_push_garbage(void* g, destruct_func destroy);
+gc_id_t gc_push_garbage(void* g, destroy_func destroy);
 void gc_clear_garbage();
 void gc_clear_all_garbage();
 void gc_unregist(gc_id_t id);

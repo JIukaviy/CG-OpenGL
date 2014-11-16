@@ -16,7 +16,7 @@
 
 struct node_t{
 	void* data;
-	destruct_func destroy;
+	destroy_func destroy;
 	node_t* next;
 	node_t* prev;
 	void** ptr_to_this_from_prev;
@@ -33,7 +33,7 @@ void list_init(){
 	LIST_ERR_NULL_IN_DATA = vme_register_error_type(list_unit_id, "Null pointer in input data");
 }
 
-node_t* create_node(void* data, destruct_func destroy){
+node_t* create_node(void* data, destroy_func destroy){
 	node_t* newnode = new node_t;
 	newnode->data = data;
 	newnode->destroy = destroy;
@@ -42,7 +42,7 @@ node_t* create_node(void* data, destruct_func destroy){
 	return newnode;
 }
 
-nodehnd list_add_node_next(nodehnd node, void* data, destruct_func destroy){
+nodehnd list_add_node_next(nodehnd node, void* data, destroy_func destroy){
 	node_t* newnode = create_node(data, destroy);
 	
 	if (node) {
@@ -64,7 +64,7 @@ nodehnd list_add_node_next(nodehnd node, void* data, destruct_func destroy){
 	return newnode;
 }
 
-nodehnd list_add_node_prev(nodehnd node, void* data, destruct_func destroy){
+nodehnd list_add_node_prev(nodehnd node, void* data, destroy_func destroy){
 	node_t* newnode = create_node(data, destroy);
 
 	if (node) {
@@ -147,12 +147,12 @@ void list_node_set_data(nodehnd node, void* data){
 	hnd2node(node)->data = data;
 }
 
-destruct_func list_node_get_destroy(nodehnd node){
+destroy_func list_node_get_destroy(nodehnd node){
 	obj_assert(node, nullptr);
 	return hnd2node(node)->destroy;
 }
 
-void list_node_set_destroy(nodehnd node, destruct_func destroy){
+void list_node_set_destroy(nodehnd node, destroy_func destroy){
 	obj_assert(node);
 	hnd2node(node)->destroy = destroy;
 }

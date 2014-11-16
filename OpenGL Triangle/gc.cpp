@@ -19,8 +19,10 @@ vme_int GC_NULL_IN_DATA = -1;
 vme_int GC_STACK_CLOSED = -1;
 vme_int GC_STACK_DONT_CLOSED = -1;
 vme_int GC_STACK_END_REACHED = -1;
+vme_int GC_GARBAGE_COLLECT_IS_PAUSED = -1;
 
 bool gc_already_init = false;
+bool pause_collect = false;
 
 void gc_init(){
 	if (gc_already_init)
@@ -30,6 +32,7 @@ void gc_init(){
 	GC_STACK_CLOSED = vme_register_error_type(gc_unit_id, "Collect garbage don't started, use: gc_start_collet");
 	GC_STACK_DONT_CLOSED = vme_register_error_type(gc_unit_id, "Inner garbage stack don't closed before the erase stack");
 	GC_STACK_END_REACHED = vme_register_error_type(gc_unit_id, "Can't move node, end of stack reached");
+	GC_GARBAGE_COLLECT_IS_PAUSED = vme_register_error_type(gc_unit_id, "You must resume collect garbage before erase collected garbage");
 	gc_already_init = true;
 }
 
@@ -39,8 +42,22 @@ gc_id_t gc_start_collect(){
 	return garbage_stack;
 }
 
+void gc_pause_collect() {
+	pause_collect = true;
+}
+
+void gc_resume_collect() {
+	pause_collect = false;
+}
+
 void gc_erase_collected(gc_id_t gc_id){
 	obj_assert(gc_id);
+
+	if (pause_collect) {
+		push_error(GC_GARBAGE_COLLECT_IS_PAUSED);
+		return;
+	}
+
 	nodehnd curr_garbage_stack_node = gc_id;
 
 	nodehnd curr_node = list_node_get_data(curr_garbage_stack_node);
@@ -54,14 +71,16 @@ void gc_erase_collected(gc_id_t gc_id){
 		nodehnd next_node = list_get_next_node(curr_node);
 		void* data = list_node_get_data(curr_node);
 		list_node_get_destroy(curr_node)(&data); //деструктор, например mat_destroy, так же вызывает функцию gc_unregist, который в свою очередь, удал€ет node
-		curr_node = next_node;					 //вызов gc_unregist в mat_destroy, сделан дл€ того чтобы, если объ€ект удал€етс€ из вне, его можно было так же исключить и из реестра.
+		curr_node = next_node;					 //вызов gc_unregist в mat_destroy, сделан дл€ того чтобы, если объ€ект удал€етс€ из вне, его можно было так же исключить из реестра.
 	}
 
 	garbage_stack = list_get_prev_node(curr_garbage_stack_node);
 	list_del_node(curr_garbage_stack_node);
 }
 
-gc_id_t gc_push_garbage(void* g, destruct_func destroy){
+gc_id_t gc_push_garbage(void* g, destroy_func destroy){
+	if (pause_collect)
+		return nullptr;
 	obj_assert(g, nullptr);
 	obj_assert(destroy, nullptr);
 
@@ -87,7 +106,7 @@ void gc_move_to_prev_stack(gc_id_t id){
 	}
 
 	void* data = list_node_get_data(node);
-	destruct_func destroy = list_node_get_destroy(node);
+	destroy_func destroy = list_node_get_destroy(node);
 	gc_unregist(id);
 }
 */

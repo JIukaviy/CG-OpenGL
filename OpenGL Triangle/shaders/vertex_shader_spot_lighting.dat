@@ -2,6 +2,7 @@
 attribute vec3 coord3d; 
 attribute vec3 v_normal;
 varying vec3 f_color;
+uniform mat4 rotate_cam;
 uniform mat4 mvp;
 uniform mat3 rotate;
 uniform mat4 model;
@@ -38,6 +39,7 @@ vec3 ambient = vec3(0.1, 0.1, 0.1);
 void main(void){
   vec3 normalDirection = normalize(v_normal * rotate);
   vec3 vertexToLight = vec3(light0.position - model * vec4(coord3d, 1.0));
+  vec4 viewDirection = vec4(0.0, 0.0, 0.0, 1.0) * rotate_cam;
   
   float distance = length(vertexToLight);
   float a = 1.0 / (light0.K1 + light0.K2 * distance + light0.K3 * distance * distance);

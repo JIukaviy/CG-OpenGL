@@ -4,14 +4,16 @@ attribute vec3 v_normal;
 varying vec3 f_color;
 uniform mat4 mvp;
 uniform mat3 rotate;
+uniform mat4 model;
+uniform mat4 rotate_cam;
 
 struct lightSource{
-  vec4 position;
+  vec4 direction;
   vec4 diffuse;
 };
 
 lightSource light0 = lightSource(
-    vec4(1.0, 1.0, 1.0, 0.0),
+    vec4(-1.0, -1.0, -1.0, 0.0),
     vec4(1.0, 1.0, 1.0, 1.0)
 );
  
@@ -24,10 +26,12 @@ vec3 ambient = vec3(0.1, 0.1, 0.1);
 
 void main(void){
   vec3 normalDirection = normalize(v_normal * rotate);
-  vec3 lightDirection = normalize(vec3(light0.position));
+  vec3 vertexToLight = vec3(light0.direction - model * vec4(coord3d, 1.0));
+  vec3 lightDirection = -normalize(vec3(light0.direction));
+  vec4 viewDirection = vec4(0.0, 0.0, 0.0, 1.0) * rotate_cam;
  
-  vec3 diffuseReflection = vec3(mymaterial.diffuse) * (ambient + vec3(light0.diffuse) * max(0.0, dot(normalDirection, lightDirection)));
+  vec3 diffuseReflection = vec3(mymaterial.diffuse) * vec3(light0.diffuse) * max(0.0, dot(normalDirection, lightDirection));
  
-  f_color = diffuseReflection;
+  f_color = ambient * vec3(mymaterial.diffuse) + diffuseReflection;
   gl_Position = mvp * vec4(coord3d, 1.0);
 }

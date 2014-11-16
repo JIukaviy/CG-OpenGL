@@ -135,9 +135,31 @@ mathnd mat_rotate_mat3(mat_elem_t angle, mat_axis axis){
 	return out_hnd;
 }
 
+mathnd mat_rotate_mat3(mat_elem_t angle_x, mat_elem_t angle_y, mat_elem_t angle_z) {
+	mat_create_out(4, 4);
+	start_garbage_collect(1);
+	mathnd t = mat_mul(mat_mul(mat_rotate_mat3(angle_z, MAT_Z), mat_rotate_mat3(angle_y, MAT_Y)), mat_rotate_mat3(angle_z, MAT_X));
+	mat_copy(out_hnd, t);
+	erase_collected_garbage(1);
+	return out_hnd;
+}
+
 mathnd mat_rotate_mat4(mat_elem_t angle, mat_axis axis){
 	mat_create_out(4, 4);
 	mathnd rot_mat3hnd = mat_rotate_mat3(angle, axis);
+	mat_t* rot_mat3 = hnd2mat(rot_mat3hnd);
+	memcpy(out->data, rot_mat3->data, sizeof(mat_elem_t) * 3);
+	memcpy(&get_elem(out, 1, 0), &get_elem(rot_mat3, 1, 0), sizeof(mat_elem_t) * 3);
+	memcpy(&get_elem(out, 2, 0), &get_elem(rot_mat3, 2, 0), sizeof(mat_elem_t) * 3);
+	mat_set_elem(out_hnd, 3, 3, 1);
+	mat_destroy(&rot_mat3hnd);
+
+	return out_hnd;
+}
+
+mathnd mat_rotate_mat4(mat_elem_t angle_x, mat_elem_t angle_y, mat_elem_t angle_z) {
+	mat_create_out(4, 4);
+	mathnd rot_mat3hnd = mat_rotate_mat3(angle_x, angle_y, angle_z);
 	mat_t* rot_mat3 = hnd2mat(rot_mat3hnd);
 	memcpy(out->data, rot_mat3->data, sizeof(mat_elem_t) * 3);
 	memcpy(&get_elem(out, 1, 0), &get_elem(rot_mat3, 1, 0), sizeof(mat_elem_t) * 3);
@@ -166,12 +188,16 @@ mathnd mat_translate(mat_elem_t x, mat_elem_t y, mat_elem_t z){
 	return out_hnd;
 }
 
-mathnd mat_scale(mat_elem_t q){
+mathnd mat_scale(mat_elem_t s){
+	return mat_scale(s, s, s);
+}
+
+mathnd mat_scale(mat_elem_t x, mat_elem_t y, mat_elem_t z) {
 	mat_create_out(4, 4);
 
-	for (int i = 0; i < 3; i++)
-		mat_set_elem(out_hnd, i, i, q);
-
+	mat_set_elem(out_hnd, 0, 0, x);
+	mat_set_elem(out_hnd, 1, 1, y);
+	mat_set_elem(out_hnd, 2, 2, z);
 	mat_set_elem(out_hnd, 3, 3, 1);
 
 	return out_hnd;
@@ -215,7 +241,14 @@ void mat_destroy(mathnd* hnd){
 	delete t->data;
 	delete *hnd;
 	*hnd = nullptr;
-	gc_unregist(gc_id);
+	if (gc_id)
+		gc_unregist(gc_id);
+}
+
+void mat_gc_unregist(mathnd hnd) {
+	mat_assert(hnd);
+	gc_unregist(hnd2mat(hnd)->gc_id);
+	hnd2mat(hnd)->gc_id = 0;
 }
 
 mathnd mat_on_elem(mathnd a, mathnd b, on_elem_pfunc func){

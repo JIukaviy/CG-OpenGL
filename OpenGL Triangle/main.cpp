@@ -5,6 +5,9 @@
 #include "vec_mat.h"
 #include "vec_mat_errors.h"
 #include "objloader.h"
+#include "file.h"
+#include "light.h"
+#include "shader_var.h"
 #include <iostream>
 #include <fstream>
 
@@ -13,8 +16,8 @@ using namespace std;
 int screen_width = 800, screen_height = 600;
 
 bool keys[256];
-
-GLuint program;
+GLuint currProg;
+GLuint program[6];
 GLint attribute_coord3d;
 GLint attribute_v_color;
 GLint attribute_v_normal;
@@ -55,27 +58,23 @@ void print_log(GLuint object){
 	free(log);
 }
 
-int create_shader(char* file_name, GLenum shader_type) {
+int create_shader(const char* file_name, GLenum shader_type) {
 	GLuint res;
 	GLint compile_ok = GL_FALSE;
 
-	ifstream fin(file_name);
-	if (!fin) {
-		cout << "Can't open file: " << file_name << endl;
+	char* s_source = file_read(file_name);
+
+	if (vme_error_appear()) {
+		vme_print_errors();
 		return 0;
 	}
-	fin.seekg(0, fin.end);
-	int file_size = fin.tellg();
-	fin.seekg(0, fin.beg);
-
-	char *s_source = new char[file_size + 1];
-	memset(s_source, 0, file_size);
-	fin.read(s_source, file_size);
 	
 	res = glCreateShader(shader_type);
 	glShaderSource(res, 1, &s_source, NULL);
 	glCompileShader(res);
 	glGetShaderiv(res, GL_COMPILE_STATUS, &compile_ok);
+
+	delete s_source;
 
 	if (!compile_ok) {
 		cout << "Error in shader: " << file_name << endl;
@@ -86,7 +85,7 @@ int create_shader(char* file_name, GLenum shader_type) {
 	return res;
 }
 
-int get_attrib_location(const char* attrib_name, GLint* attrib) {
+int get_attrib_location(GLuint program, const char* attrib_name, GLint* attrib) {
 	*attrib = glGetAttribLocation(program, attrib_name);
 	if (*attrib == -1) {
 		cout << "Could not bind attribute " << attrib_name << endl;
@@ -95,7 +94,7 @@ int get_attrib_location(const char* attrib_name, GLint* attrib) {
 	return 0;
 }
 
-int get_uniform_location(const char* uniform_name, GLint* uniform) {
+int get_uniform_location(GLuint program, const char* uniform_name, GLint* uniform) {
 	*uniform = glGetUniformLocation(program, uniform_name);
 	if (*uniform == -1) {
 		cout << "Could not bind uniform " << uniform_name << endl;
@@ -104,8 +103,38 @@ int get_uniform_location(const char* uniform_name, GLint* uniform) {
 	return 0;
 }
 
-int init_resources() {
+int create_program(GLuint* program, const char* vertex_shader_name, const char* fragment_shader_name) {
 	GLint link_ok = GL_FALSE;
+	GLuint vs;
+	if (!(vs = create_shader(vertex_shader_name, GL_VERTEX_SHADER)))
+		return 1;
+
+	GLuint fs;
+	if (!(fs = create_shader(fragment_shader_name, GL_FRAGMENT_SHADER)))
+		return 1;
+
+	*program = glCreateProgram();
+	glAttachShader(*program, vs);
+	glAttachShader(*program, fs);
+	glLinkProgram(*program);
+	glGetProgramiv(*program, GL_LINK_STATUS, &link_ok);
+
+	if (!link_ok)
+		print_log(*program);
+
+	return !link_ok;
+}
+
+int get_var_locations(GLuint program) {
+	if (get_attrib_location(program, "coord3d", &attribute_coord3d)) return 1;
+	if (get_attrib_location(program, "v_normal", &attribute_v_normal)) return 1;
+	if (get_uniform_location(program, "mvp", &uniform_mvp)) return 1;
+	if (get_uniform_location(program, "rotate", &uniform_rotate)) return 1;
+	if (get_uniform_location(program, "rotate_cam", &uniform_rotate_cam)) return 1;
+	if (get_uniform_location(program, "model", &uniform_model)) return 1;
+}
+
+int init_resources() {
 	GLint compile_ok = GL_FALSE;
 	GLchar *info_buffer;
 	info_buffer = new GLchar[200];
@@ -113,31 +142,14 @@ int init_resources() {
 	memset(&keys, 0, sizeof(keys));
 
 	// Компилируем вершинный шейдер
-	
-	GLuint vs;
-	
-	if (!(vs = create_shader("shaders/vertex_shader_spot_lighting_specular.dat", GL_VERTEX_SHADER)))
-		return 1;
 
-	//Компилируем фрагментный шейдер
+	if (create_program(&program[0], "shaders/vertex_shader.dat", "shaders/fragment_shader_directional_lighting.dat")) return 1;
+	if (create_program(&program[1], "shaders/vertex_shader_spot_lighting_specular.dat", "shaders/fragment_shader.dat")) return 1;
+	if (create_program(&program[2], "shaders/vertex_shader_point_lighting.dat", "shaders/fragment_shader.dat")) return 1;
+	if (create_program(&program[3], "shaders/vertex_shader.dat", "shaders/forward rendering/fragment_shader_spot_lighting_diffuse.dat")) return 1;
+	if (create_program(&program[4], "shaders/vertex_shader.dat", "shaders/forward rendering/fragment_shader_spot_lighting_specular.dat")) return 1;
 
-	GLuint fs;
-	if (!(fs = create_shader("shaders/fragment_shader.dat", GL_FRAGMENT_SHADER)))
-		return 1;
-
-	//Создаем программу и линкуем шейдеры
-
-	program = glCreateProgram();
-	glAttachShader(program, vs);
-	glAttachShader(program, fs);
-	glLinkProgram(program);
-	glGetProgramiv(program, GL_LINK_STATUS, &link_ok);
-
-	if (!link_ok) {
-		print_log(vs);
-		return 1;
-	}
-	glUseProgram(program);
+	currProg = program[0];
 
 	//Создание VBO
 
@@ -150,10 +162,8 @@ int init_resources() {
 
 	objlodaer_load_file("models/teapot.obj", &obj_vertices, &vert_size, &obj_normals, &norm_size, &obj_elements, &elem_size);
 
-	if (vme_error_appear()) {
-		vme_print_errors();
+	if (vme_error_appear())
 		return 1;
-	}
 
 	glGenBuffers(1, &vbo_obj_vertices);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_vertices);
@@ -173,24 +183,16 @@ int init_resources() {
 	delete obj_normals;
 	delete obj_elements;
 
-	//Создание VAO
-	glGenVertexArrays(1, &vao_id);
-	glBindVertexArray(vao_id);
+	get_var_locations(currProg);
 
 	//Получение указателя на переменные
-
-	if (get_attrib_location("coord3d", &attribute_coord3d)) return 1;
-	if (get_attrib_location("v_normal", &attribute_v_normal)) return 1;
-	if (get_uniform_location("mvp", &uniform_mvp)) return 1;
-	if (get_uniform_location("rotate", &uniform_rotate)) return 1;
-	if (get_uniform_location("rotate_cam", &uniform_rotate_cam)) return 1;
-	if (get_uniform_location("model", &uniform_model)) return 1;
 
 	return 0;
 }
 
 void free_resources() {
-	glDeleteProgram(program);
+	for (int i = 0; i < 6; i++)
+		glDeleteProgram(program[i]);
 	glDeleteBuffers(1, &vbo_obj_vertices);
 	glDeleteBuffers(1, &vbo_obj_colors);
 }
@@ -198,7 +200,8 @@ void free_resources() {
 void Display() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glUseProgram(program);
+	glUseProgram(currProg);
+	get_var_locations(currProg);
 	glEnableVertexAttribArray(attribute_coord3d);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_vertices);
 	glVertexAttribPointer(attribute_coord3d, 3, GL_FLOAT, GL_FALSE, 0, 0);
@@ -215,11 +218,36 @@ void Display() {
 	glDisableVertexAttribArray(attribute_coord3d);
 	glDisableVertexAttribArray(attribute_v_normal);
 
+	/*glUseProgram(program[4]);
+	get_var_locations(program[4]);
+	glEnableVertexAttribArray(attribute_coord3d);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_vertices);
+	glVertexAttribPointer(attribute_coord3d, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+	glEnableVertexAttribArray(attribute_v_normal);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_normals);
+	glVertexAttribPointer(attribute_v_normal, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_obj_elements);
+	glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+	glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);*/
+
 	glutSwapBuffers();
 }
 
 void onKeyDown(unsigned char key, int x, int y) {
 	keys[key] = true;
+	if (key == 'z')
+		currProg = program[0];
+	if (key == 'x')
+		currProg = program[1];
+	if (key == 'c')
+		currProg = program[2];
+	if (key == 'v')
+		currProg = program[3];
+	if (key == 'b')
+		currProg = program[4];
+	get_var_locations(currProg);
 }
 void onKeyUp(unsigned char key, int x, int y) {
 	keys[key] = false;
@@ -236,7 +264,7 @@ void idle(){
 	double time = glutGet(GLUT_ELAPSED_TIME);
 	double move = sin(time * (2 * 3.145) / 5000);
 	double angle = time / 1000;
-	glUseProgram(program);
+	glUseProgram(currProg);
 
 	start_garbage_collect(1);
 
@@ -272,10 +300,10 @@ void idle(){
 	vec_copy(cam_pos, t_cam_pos);
 	vec_copy(cam_up, up_direction);
 
-	vechnd obj_pos = vec_create3(0, 0, move - 3);
+	vechnd obj_pos = vec_create3(-1 + move, 0, 0);
 
 	mathnd scale = mat_scale(1.0);
-	mathnd rotate = mat_rotate_mat4(angle, MAT_Y);
+	mathnd rotate = mat_rotate_mat4(0, MAT_Y);
 	mathnd translate = vm_mat_translate(obj_pos);
 
 	mathnd model = mat_mul(translate, mat_mul(rotate, scale));
@@ -343,6 +371,8 @@ int main(int argc, char **argv) {
 	vme_init();
 	gc_init();
 	objlodaer_init();
+	light_init();
+	file_init();
 
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_ALPHA | GLUT_DOUBLE | GLUT_DEPTH);
@@ -366,6 +396,16 @@ int main(int argc, char **argv) {
 
 	cam_pos = vec_create(3);
 	world_cam_target = vec_create(3);
+	lighthnd light0 = light_create_directional(vec_create3(1.0, 1.0, 1.0), 1.0, vec_create3(-1.0, -1.0, -1.0));
+
+	vechnd вектор = vec_create(3);
+
+	if (vme_error_appear())
+		vme_print_errors();
+
+	//shvr_make_shader_text(&light0, 1, nullptr, &rotate_var, 1);
+
+	light_destroy(&light0);
 
 	if (!init_resources()) {
 		glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_CONTINUE_EXECUTION);
@@ -388,6 +428,10 @@ int main(int argc, char **argv) {
 	gc_clear_all_garbage();
 
 	free_resources();
+
+	if (vme_error_appear())
+		vme_print_errors();
+
 	system("pause");
 
 	return 0;
