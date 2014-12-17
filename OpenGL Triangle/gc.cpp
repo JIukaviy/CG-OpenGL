@@ -123,3 +123,7 @@ void gc_clear_all_garbage(){
 	while (garbage_stack)
 		gc_erase_collected(garbage_stack);
 }
+void gc_sample_destroy(void** data) {
+	if (data && *data)
+		delete *data;
+}

@@ -55,11 +55,21 @@ void obj_set_mesh(objhnd obj, meshhnd mesh) {
 	hnd2obj(obj)->mesh = mesh;
 }
 
+meshhnd obj_get_mesh(objhnd obj) {
+	obj_assert(obj, nullptr);
+	return hnd2obj(obj)->mesh;
+}
+
 void obj_set_material(objhnd obj, mtlhnd mtl) {
 	obj_assert(obj);
 	obj_assert(mtl);
 
 	hnd2obj(obj)->material = mtl;
+}
+
+mtlhnd obj_get_material(objhnd obj) {
+	obj_assert(obj, nullptr);
+	return hnd2obj(obj)->material;
 }
 
 void obj_set_position(objhnd obj, vechnd pos) {

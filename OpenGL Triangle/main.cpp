@@ -1,6 +1,7 @@
 ﻿#define GLEW_STATIC
 #include <GL\glew.h>
 #include <GL\freeglut.h>
+#include "SOIL.h"
 #include "gc.h"
 #include "vec_mat.h"
 #include "vec_mat_errors.h"
@@ -8,6 +9,9 @@
 #include "file.h"
 #include "light.h"
 #include "shader_var.h"
+#include "material.h"
+#include "scene.h"
+#include "mesh.h"
 #include <iostream>
 #include <fstream>
 
@@ -18,23 +22,36 @@ int screen_width = 800, screen_height = 600;
 bool keys[256];
 GLuint currProg;
 GLuint program[6];
-GLint attribute_coord3d;
+GLint attribute_v_pos;
 GLint attribute_v_color;
 GLint attribute_v_normal;
+GLint attribute_v_tangent;
+GLint attribute_v_texcoord;
 GLint uniform_fade;
 GLint uniform_mvp;
 GLint uniform_rotate;
 GLint uniform_rotate_cam;
 GLint uniform_model;
+GLint uniform_diffuse_texture;
+GLint uniform_specular_texture;
+GLint uniform_normal_texture;
+GLint uniform_cam_direction;
 GLuint vbo_obj_vertices;
 GLuint vbo_obj_normals;
 GLuint vbo_obj_colors;
+GLuint vbo_obj_tangents;
+GLuint vbo_obj_texcoords;
 GLuint ibo_obj_elements;
+GLuint diffuse_texture_id;
+GLuint normal_texture_id;
+GLuint specular_texture_id;
 GLuint vao_id;
 
 const int MAX_FILE_SIZE = 500;
 
 mathnd rotate_mat;
+
+scenehnd scene;
 
 void print_log(GLuint object){
 	GLint log_length = 0;
@@ -126,11 +143,17 @@ int create_program(GLuint* program, const char* vertex_shader_name, const char* 
 }
 
 int get_var_locations(GLuint program) {
-	if (get_attrib_location(program, "coord3d", &attribute_coord3d)) return 1;
+	if (get_attrib_location(program, "v_pos", &attribute_v_pos)) return 1;
 	if (get_attrib_location(program, "v_normal", &attribute_v_normal)) return 1;
+	//if (get_attrib_location(program, "v_tangent", &attribute_v_tangent)) return 1;
+	if (get_attrib_location(program, "v_texcoord", &attribute_v_texcoord)) return 1;
+	if (get_uniform_location(program, "texture_diffuse", &uniform_diffuse_texture)) return 1;
+	//if (get_uniform_location(program, "texture_normal", &uniform_normal_texture)) return 1;
+	if (get_uniform_location(program, "texture_specular", &uniform_specular_texture)) return 1;
 	if (get_uniform_location(program, "mvp", &uniform_mvp)) return 1;
-	if (get_uniform_location(program, "rotate", &uniform_rotate)) return 1;
-	if (get_uniform_location(program, "rotate_cam", &uniform_rotate_cam)) return 1;
+	//if (get_uniform_location(program, "cam_direction", &uniform_cam_direction)) return 1;
+	//if (get_uniform_location(program, "rotate", &uniform_rotate)) return 1;
+	//if (get_uniform_location(program, "rotate_cam", &uniform_rotate_cam)) return 1;
 	if (get_uniform_location(program, "model", &uniform_model)) return 1;
 }
 
@@ -143,11 +166,14 @@ int init_resources() {
 
 	// Компилируем вершинный шейдер
 
-	if (create_program(&program[0], "shaders/vertex_shader.dat", "shaders/fragment_shader_directional_lighting.dat")) return 1;
-	if (create_program(&program[1], "shaders/vertex_shader_spot_lighting_specular.dat", "shaders/fragment_shader.dat")) return 1;
-	if (create_program(&program[2], "shaders/vertex_shader_point_lighting.dat", "shaders/fragment_shader.dat")) return 1;
-	if (create_program(&program[3], "shaders/vertex_shader.dat", "shaders/forward rendering/fragment_shader_spot_lighting_diffuse.dat")) return 1;
-	if (create_program(&program[4], "shaders/vertex_shader.dat", "shaders/forward rendering/fragment_shader_spot_lighting_specular.dat")) return 1;
+	/*if (create_program(&program[0], "shaders/deffered_shading.v.glsl", "shaders/deffered_shading.f.glsl")) return 1;
+	if (create_program(&program[1], "shaders/deffered_shading.v.glsl", "shaders/deffered_shading.f.glsl")) return 1;*/
+	if (create_program(&program[0], "shaders/vertex_shader.dat", "shaders/fragment_shader_spot_lighting_specular.dat")) return 1;
+	if (create_program(&program[1], "shaders/vertex_shader.dat", "shaders/fragment_shader_point_lighting_specular.dat")) return 1;
+	//if (create_program(&program[2], "shaders/vertex_shader.dat", "shaders/fragment_shader_directional_lighting_specular.dat")) return 1;
+	//if (create_program(&program[2], "shaders/vertex_shader_point_lighting.dat", "shaders/fragment_shader.dat")) return 1;
+	//if (create_program(&program[3], "shaders/vertex_shader.dat", "shaders/forward rendering/fragment_shader_spot_lighting_diffuse.dat")) return 1;
+	
 
 	currProg = program[0];
 
@@ -155,12 +181,15 @@ int init_resources() {
 
 	GLfloat* obj_vertices;
 	GLfloat* obj_normals;
+	GLfloat* obj_texcoords;
+	GLfloat* obj_tangents;
 	GLushort* obj_elements;
 	int vert_size;
-	int norm_size;
+	int texcoords_size;
 	int elem_size;
 
-	objlodaer_load_file("models/teapot.obj", &obj_vertices, &vert_size, &obj_normals, &norm_size, &obj_elements, &elem_size);
+	objlodaer_load_file("models/airplane.obj", &obj_vertices, &obj_normals, &obj_elements, &obj_texcoords, &obj_tangents, &vert_size, &texcoords_size, &elem_size);
+	//objlodaer_load_file("models/teapot.obj", &obj_vertices, &vert_size, &obj_normals, &norm_size, &obj_elements, &elem_size);
 
 	if (vme_error_appear())
 		return 1;
@@ -171,7 +200,15 @@ int init_resources() {
 
 	glGenBuffers(1, &vbo_obj_normals);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_normals);
-	glBufferData(GL_ARRAY_BUFFER, norm_size*sizeof(GLfloat), obj_normals, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, vert_size*sizeof(GLfloat), obj_normals, GL_STATIC_DRAW);
+
+	glGenBuffers(1, &vbo_obj_tangents);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_tangents);
+	glBufferData(GL_ARRAY_BUFFER, vert_size*sizeof(GLfloat), obj_tangents, GL_STATIC_DRAW);
+
+	glGenBuffers(1, &vbo_obj_texcoords);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_texcoords);
+	glBufferData(GL_ARRAY_BUFFER, texcoords_size*sizeof(GLfloat), obj_texcoords, GL_STATIC_DRAW);
 
 	//Создание IBO
 
@@ -182,6 +219,25 @@ int init_resources() {
 	delete obj_vertices;
 	delete obj_normals;
 	delete obj_elements;
+	delete obj_texcoords;
+
+	diffuse_texture_id = SOIL_load_OGL_texture(
+		"diffuse_map.bmp",
+		SOIL_LOAD_AUTO,
+		SOIL_CREATE_NEW_ID,
+		SOIL_FLAG_MIPMAPS | SOIL_FLAG_TEXTURE_REPEATS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_NTSC_SAFE_RGB | SOIL_FLAG_COMPRESS_TO_DXT);
+
+	/*normal_texture_id = SOIL_load_OGL_texture(
+		"img_test.bmp",
+		SOIL_LOAD_AUTO,
+		SOIL_CREATE_NEW_ID,
+		SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_NTSC_SAFE_RGB | SOIL_FLAG_COMPRESS_TO_DXT);*/
+
+	specular_texture_id = SOIL_load_OGL_texture(
+		"specular_map.bmp",
+		SOIL_LOAD_AUTO,
+		SOIL_CREATE_NEW_ID,
+		SOIL_FLAG_MIPMAPS | SOIL_FLAG_TEXTURE_REPEATS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_NTSC_SAFE_RGB | SOIL_FLAG_COMPRESS_TO_DXT);
 
 	get_var_locations(currProg);
 
@@ -195,6 +251,7 @@ void free_resources() {
 		glDeleteProgram(program[i]);
 	glDeleteBuffers(1, &vbo_obj_vertices);
 	glDeleteBuffers(1, &vbo_obj_colors);
+	glDeleteTextures(1, &diffuse_texture_id);
 }
 
 void Display() {
@@ -202,27 +259,46 @@ void Display() {
 
 	glUseProgram(currProg);
 	get_var_locations(currProg);
-	glEnableVertexAttribArray(attribute_coord3d);
+
+	glEnableVertexAttribArray(attribute_v_pos);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_vertices);
-	glVertexAttribPointer(attribute_coord3d, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glVertexAttribPointer(attribute_v_pos, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
 	glEnableVertexAttribArray(attribute_v_normal);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_normals);
 	glVertexAttribPointer(attribute_v_normal, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+	glEnableVertexAttribArray(attribute_v_texcoord);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_texcoords);
+	glVertexAttribPointer(attribute_v_texcoord, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, diffuse_texture_id);
+	glEnable(GL_TEXTURE_2D);
+	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
+	glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_REPLACE);
+	glUniform1i(uniform_diffuse_texture, 0);
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, specular_texture_id);
+	glEnable(GL_TEXTURE_2D);
+	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
+	glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_INCR);
+	glUniform1i(uniform_specular_texture, 1);
 
 	int size;
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_obj_elements);
 	glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
 	glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
 
-	glDisableVertexAttribArray(attribute_coord3d);
+	glDisableVertexAttribArray(attribute_v_pos);
 	glDisableVertexAttribArray(attribute_v_normal);
 
 	/*glUseProgram(program[4]);
 	get_var_locations(program[4]);
-	glEnableVertexAttribArray(attribute_coord3d);
+	glEnableVertexAttribArray(attribute_v_pos);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_vertices);
-	glVertexAttribPointer(attribute_coord3d, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glVertexAttribPointer(attribute_v_pos, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
 	glEnableVertexAttribArray(attribute_v_normal);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_obj_normals);
@@ -230,7 +306,9 @@ void Display() {
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_obj_elements);
 	glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
-	glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);*/
+	glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
+
+	scene_draw(scene);*/
 
 	glutSwapBuffers();
 }
@@ -264,7 +342,7 @@ void idle(){
 	double time = glutGet(GLUT_ELAPSED_TIME);
 	double move = sin(time * (2 * 3.145) / 5000);
 	double angle = time / 1000;
-	glUseProgram(currProg);
+	//glUseProgram(currProg);
 
 	start_garbage_collect(1);
 
@@ -284,10 +362,10 @@ void idle(){
 	cam_direction = vec_normalize(vec_convert(cam_direction, 3));
 
 	vechnd forward_direction = cam_direction;
-	vechnd bacward_direction = vec_invert(cam_direction);
+	vechnd bacward_direction = vec_inverse(cam_direction);
 	vechnd right_direction = vec_cross(forward_direction, cam_up);
-	vechnd left_direction = vec_invert(right_direction);
-	vechnd up_direction = vec_invert(cam_up);
+	vechnd left_direction = vec_inverse(right_direction);
+	vechnd up_direction = vec_inverse(cam_up);
 	vechnd down_direction = cam_up;
 	
 	if (keys['w']) 	t_cam_pos = vec_sub(t_cam_pos, vec_mul(forward_direction, d));
@@ -300,30 +378,30 @@ void idle(){
 	vec_copy(cam_pos, t_cam_pos);
 	vec_copy(cam_up, up_direction);
 
-	vechnd obj_pos = vec_create3(-1 + move, 0, 0);
+	vechnd obj_pos = vec_create3(0, 0, -1);
 
 	mathnd scale = mat_scale(1.0);
-	mathnd rotate = mat_rotate_mat4(0, MAT_Y);
+	mathnd rotate = mat_rotate_mat4(angle, MAT_Y);
 	mathnd translate = vm_mat_translate(obj_pos);
 
 	mathnd model = mat_mul(translate, mat_mul(rotate, scale));
 	//mathnd view = vm_mat_look_at(cam_pos, vec_pos_anim, cam_up);
 	
-	mathnd view = mat_mul(rotate_cam, vm_mat_translate(vec_invert(cam_pos)));
-	//mathnd view = vm_mat_translate(vec_invert(cam_pos));
+	mathnd view = mat_mul(rotate_cam, vm_mat_translate(vec_inverse(cam_pos)));
+	//mathnd view = vm_mat_translate(vec_inverse(cam_pos));
 	mathnd projection = mat_perspective_projection(45.0, 1.0 * screen_width / screen_height, 0.1, 100.0);
 	//mathnd projection = mat_orthographic_projection(-5, 5, -5, 5, -5, 5);
 	mathnd mvp = mat_mul(projection, mat_mul(view, model));
 
 	if (vme_error_appear()) {
-		vme_print_errors();
 		glutIdleFunc(nullptr);
 	}
 	else {
 		glUniformMatrix4fv(uniform_mvp, 1, GL_TRUE, mat_get_elems(mvp));
 		glUniformMatrix4fv(uniform_model, 1, GL_TRUE, mat_get_elems(model));
-		glUniformMatrix4fv(uniform_rotate_cam, 1, GL_TRUE, mat_get_elems(rotate_cam));
-		glUniformMatrix3fv(uniform_rotate, 1, GL_TRUE, mat_get_elems(mat_create_minor(rotate, 3, 3)));
+		glUniform3fv(uniform_cam_direction, 1, vec_get_elems(cam_direction));
+		//glUniformMatrix4fv(uniform_rotate_cam, 1, GL_TRUE, mat_get_elems(rotate_cam));
+		//glUniformMatrix3fv(uniform_rotate, 1, GL_TRUE, mat_get_elems(mat_create_minor(rotate, 3, 3)));
 	}
 
 	erase_collected_garbage(1);
@@ -355,7 +433,6 @@ void onMouseMotion(int x, int y) {
 	last_y = y;
 
 	if (vme_error_appear()) {
-		vme_print_errors();
 		glutMotionFunc(nullptr);
 	}
 }
@@ -370,9 +447,15 @@ int main(int argc, char **argv) {
 	vm_init();
 	vme_init();
 	gc_init();
+	//shvr_init();
 	objlodaer_init();
-	light_init();
+	//light_init();
 	file_init();
+	//mtl_init();
+	//obj_init();
+	//cam_init();
+	//scene_init();
+	//mesh_init();
 
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_ALPHA | GLUT_DOUBLE | GLUT_DEPTH);
@@ -396,17 +479,20 @@ int main(int argc, char **argv) {
 
 	cam_pos = vec_create(3);
 	world_cam_target = vec_create(3);
-	lighthnd light0 = light_create_directional(vec_create3(1.0, 1.0, 1.0), 1.0, vec_create3(-1.0, -1.0, -1.0));
+	/*lighthnd light0 = light_create_directional(vec_create3(1.0, 1.0, 1.0), 1.0, vec_create3(-1.0, -1.0, -1.0));
+	efcthnd diffuse = efct_create_diffuse(vec_create3(0.2, 0.3, 0.1));
+	mtlhnd mtl = mtl_create();
+	mtl_add_effect(mtl, diffuse);
+	objhnd teapot = obj_create();
+	obj_set_material(teapot, mtl);
+	obj_set_mesh(teapot, mesh_create("models/teapot.obj"));
+	camhnd cam = cam_create(vec_create3(0, 0, -2), vec_create3(0, 0, 0), 45, 1);
 
-	vechnd вектор = vec_create(3);
-
-	if (vme_error_appear())
-		vme_print_errors();
-
-	//shvr_make_shader_text(&light0, 1, nullptr, &rotate_var, 1);
-
-	light_destroy(&light0);
-
+	scene = scene_create();
+	scene_add_light(scene, light0);
+	scene_add_object(scene, teapot);
+	scene_set_cam(scene, cam);
+	vme_set_no_errors();*/
 	if (!init_resources()) {
 		glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_CONTINUE_EXECUTION);
 		glutDisplayFunc(Display);

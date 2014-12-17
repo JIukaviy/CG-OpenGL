@@ -6,6 +6,7 @@
 #include "gc.h"
 #include "objloader.h"
 #include "vec_mat_errors.h"
+#include <set>
 
 using namespace std;
 
@@ -16,14 +17,35 @@ vme_int OBJLOADER_ERR_NULL_IN_DATA;
 vme_int OBJLOADER_ERR_CANT_OPEN_FILE;
 vme_int OBJLOADER_ERR_INVALIDATE_FILE;
 
+struct vec3 {
+	GLfloat x;
+	GLfloat y;
+	GLfloat z;
+};
+
+struct vec2 {
+	GLfloat x;
+	GLfloat y;
+};
+
+struct vertex {
+	int v;
+	int vn;
+	int vt;
+	vechnd vtan;
+};
+
 void objlodaer_init() {
-	objloader_unit_id = vme_register_unit("OBJ_LODAER");
+	objloader_unit_id = vme_register_unit("OBJ_LOADER");
 	OBJLOADER_ERR_NULL_IN_DATA = vme_register_error_type(objloader_unit_id, "Null in input data");
 	OBJLOADER_ERR_CANT_OPEN_FILE = vme_register_error_type(objloader_unit_id, "Can't open file");
 	OBJLOADER_ERR_INVALIDATE_FILE = vme_register_error_type(objloader_unit_id, "Invalidate file");
 }
 
-void objlodaer_load_file(const char* file_name, GLfloat** a_vertices, int* vert_size, GLfloat** a_normals, int* normals_size, GLushort** a_elements, int* elements_size) {
+void objlodaer_load_file(const char* file_name,
+						 GLfloat** a_vertices, int* vert_size,
+						 GLfloat** a_normals, int* normals_size,
+						 GLushort** a_elements, int* elements_size) {
 	obj_assert(file_name);
 	obj_assert(a_vertices);
 	obj_assert(vert_size);
@@ -51,6 +73,7 @@ void objlodaer_load_file(const char* file_name, GLfloat** a_vertices, int* vert_
 
 	vector<vec3> vertices;
 	vector<vec3> normals;
+	vector<vec3> tex;
 	vector<GLushort> elements;
 
 	string line;
@@ -60,12 +83,12 @@ void objlodaer_load_file(const char* file_name, GLfloat** a_vertices, int* vert_
 			vec3 v; 
 			s >> v.x >> v.y >> v.z;
 			vertices.push_back(v);
-		} /*else if (line.substr(0, 3) == "vn ") {
+		} else if (line.substr(0, 3) == "vt ") {
 			istringstream s(line.substr(3));
 			vec3 v;
 			s >> v.x >> v.y >> v.z;
 			normals.push_back(v);
-		} else if (line.substr(0, 2) == "f ") {
+		} /*else if (line.substr(0, 2) == "f ") {
 			istringstream s(line.substr(2));
 			GLushort v1, v2, v3, vn1, vn2, vn3;
 			s >> v1; s.ignore(2);
@@ -120,9 +143,6 @@ void objlodaer_load_file(const char* file_name, GLfloat** a_vertices, int* vert_
 		erase_collected_garbage(1);
 	}
 
-#undef vec2vechnd
-#undef vechnd2vec3
-
 	*vert_size = vertices.size() * 3;
 	*normals_size = normals.size() * 3;
 	*elements_size = elements.size();
@@ -153,3 +173,157 @@ void objlodaer_load_file(const char* file_name, GLfloat** a_vertices, int* vert_
 	*a_normals = t_normals;
 	*a_elements = t_elements;
 }
+
+
+void objlodaer_load_file(const char* file_name,
+						 GLfloat** a_vertices, 
+						 GLfloat** a_normals,
+						 GLushort** a_elements,
+						 GLfloat** a_texture, 
+						 GLfloat** a_tangent,
+						 int* vert_size,
+						 int* tex_size,
+						 int* elems_size
+						 ) {
+	obj_assert(file_name);
+
+	ifstream fin(file_name);
+	if (!fin) {
+		push_error_info(OBJLOADER_ERR_CANT_OPEN_FILE, file_name);
+		return;
+	}
+
+	struct face {
+		int v;
+		int vn;
+		int vt;
+	};
+
+	vector<vec3> vertices;
+	vector<vec3> normals;
+	vector<vec2> texcoords;
+	vector<int> indices;
+	vector<vertex> ivertices;
+
+	string line;
+	int indpos = 0;
+	start_garbage_collect(1);
+	while (getline(fin, line)) {
+		if (line.substr(0, 2) == "v ") {
+			istringstream s(line.substr(2));
+			vec3 v;
+			s >> v.x >> v.y >> v.z;
+			vertices.push_back(v);
+		} else if (line.substr(0, 3) == "vn ") {
+			istringstream s(line.substr(3));
+			vec3 v;
+			s >> v.x >> v.y >> v.z;
+			normals.push_back(v);
+		} else if (line.substr(0, 3) == "vt ") {
+			istringstream s(line.substr(3));
+			vec2 v;
+			s >> v.x >> v.y;
+			texcoords.push_back(v);
+		} else if (line.substr(0, 2) == "f ") {
+			istringstream s(line.substr(2));
+			for (int i = 0; i < 3; i++) {
+				vertex vert;	char c; 
+				s >> vert.v >> c >> vert.vt >> c >> vert.vn;
+				vert.v--; vert.vt--; vert.vn--;
+				vert.vtan = vec_create(3);
+
+				int pos = -1;
+				for (int i = 0; i < ivertices.size(); i++)
+					if (memcmp(&ivertices[i], &vert, sizeof(vertex)) == 0) {
+						pos = i;
+						break;
+					}
+				
+				if (pos < 0) {
+					ivertices.push_back(vert); 
+					pos = indpos;
+				}
+
+				indices.push_back(pos);
+				indpos++;
+			}
+		} else if (line[0] == '#') { /* ignoring this line */ } else { /* ignoring this line */ }
+	}
+
+	int pos = 0;
+
+	*vert_size = ivertices.size() * 3;
+	*tex_size = ivertices.size() * 2;
+	*elems_size = indices.size();
+
+	GLfloat* t_vertices;
+	GLfloat* t_normals;
+	GLfloat* t_texcoords;
+	GLfloat* t_tangents;
+	GLushort* t_elements;
+	int x = 0;
+
+	for (int i = 0; i < ivertices.size(); i += 3) {
+		start_garbage_collect(1);
+		vertex vtx0 = ivertices[i];
+		vertex vtx1 = ivertices[i + 1];
+		vertex vtx2 = ivertices[i + 2];
+
+		vechnd v0 = vec2vechnd(vertices[vtx0.v]);
+		vechnd v1 = vec2vechnd(vertices[vtx1.v]);
+		vechnd v2 = vec2vechnd(vertices[vtx2.v]);
+
+		float DeltaU1 = texcoords[vtx1.vt].x - texcoords[vtx0.vt].x;
+		float DeltaV1 = texcoords[vtx1.vt].y - texcoords[vtx0.vt].y;
+
+		float DeltaU2 = texcoords[vtx2.vt].x - texcoords[vtx0.vt].x;
+		float DeltaV2 = texcoords[vtx2.vt].y - texcoords[vtx0.vt].y;
+
+		float f = 1.0 / (DeltaU1 * DeltaV2 - DeltaU2 * DeltaV1);
+
+		vechnd Edge1 = vec_mul(vec_sub(v1, v0), DeltaV2);
+		vechnd Edge2 = vec_mul(vec_sub(v2, v0), DeltaV1);
+
+		vechnd tangent = vec_mul(vec_sub(Edge1, Edge2), f);
+
+		vec_copy(ivertices[i].vtan, vec_add(ivertices[i].vtan, tangent));
+		vec_copy(ivertices[i + 1].vtan, vec_add(ivertices[i + 1].vtan, tangent));
+		vec_copy(ivertices[i + 2].vtan, vec_add(ivertices[i + 2].vtan, tangent));
+
+		erase_collected_garbage(1);
+	}
+
+	t_vertices = new GLfloat[*vert_size];
+	for (int i = 0; i < ivertices.size(); i++) 
+		memcpy(&t_vertices[i*3], &vertices[ivertices[i].v], sizeof(float) * 3);
+
+	t_normals = new GLfloat[*vert_size];
+	for (int i = 0; i < ivertices.size(); i++)
+		memcpy(&t_normals[i*3], &normals[ivertices[i].vn], sizeof(float) * 3);
+
+	t_texcoords = new GLfloat[*tex_size];
+	for (int i = 0; i < ivertices.size(); i++)
+		memcpy(&t_texcoords[i*2], &texcoords[ivertices[i].vt], sizeof(float) * 2);
+
+	t_tangents = new GLfloat[*vert_size];
+	for (int i = 0; i < ivertices.size(); i++) {
+		start_garbage_collect(1);
+		memcpy(&t_tangents[i*3], vec_get_elems(vec_normalize(ivertices[i].vtan)), sizeof(float) * 3);
+		erase_collected_garbage(1);
+	}
+
+	t_elements = new GLushort[indices.size()];
+	for (int i = 0; i < indices.size(); i++)
+		t_elements[i] = indices[i];
+
+	*a_vertices = t_vertices;
+	*a_normals = t_normals;
+	*a_elements = t_elements;
+	*a_texture = t_texcoords;
+	*a_tangent = t_tangents;
+
+	erase_collected_garbage(1);
+}
+
+#undef vec2vechnd
+#undef vechnd2vec3

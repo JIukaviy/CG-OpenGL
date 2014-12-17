@@ -14,3 +14,4 @@ gc_id_t gc_push_garbage(void* g, destroy_func destroy);
 void gc_clear_garbage();
 void gc_clear_all_garbage();
 void gc_unregist(gc_id_t id);
+void gc_sample_destroy(void** data);

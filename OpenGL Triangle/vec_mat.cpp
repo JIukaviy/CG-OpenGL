@@ -114,7 +114,7 @@ mathnd vm_mat_look_at(vechnd cam_pos, vechnd cam_target, vechnd cam_up){
 
 	mat_set_elem(out_mat, 3, 3, 1);
 
-	mathnd t_out = mat_mul(vm_mat_translate(vec_invert(cam_pos)), out_mat);
+	mathnd t_out = mat_mul(vm_mat_translate(vec_inverse(cam_pos)), out_mat);
 	mat_copy(out_mat, t_out);
 
 	erase_collected_garbage(1);

@@ -298,7 +298,7 @@ vechnd vec_normalize(vechnd hnd){
 	return out_hnd;
 }
 
-vechnd vec_invert(vechnd hnd){
+vechnd vec_inverse(vechnd hnd){
 	vec_assert_1(hnd, nullptr);
 	vec_t* t = hnd2vec(hnd);
 	vec_create_out(t->size);

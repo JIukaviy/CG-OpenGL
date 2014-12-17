@@ -7,19 +7,20 @@ typedef efcthnd(*efct_copy_func)(efcthnd);
 
 struct effect_t {
 	GLuint program;
-	const char* shader_name;
+	const char* v_shader_name;
+	const char* f_shader_name;
 	MTL_EFFECT_TYPE type;
 };
 
 struct effect_diffuse_t {
-	effect_t base;
-	shvrhnd color;
+	MTL_EFFECT_TYPE type;
+	unifhnd color;
 };
 
 struct effect_specular_t {
-	effect_t base;
-	shvrhnd color;
-	shvrhnd shinines;
+	MTL_EFFECT_TYPE type;
+	unifhnd color;
+	unifhnd shinines;
 };
 
 struct material_t {
@@ -41,11 +42,21 @@ vme_int MTL_ERR_INVALIDE_DATA;
 #define obj_assert(x, ret) assert(x, MTL_ERR_NULL_IN_DATA, ret);
 #define data_assert(x, ret) assert(x, SHVR_ERR_INVALIDE_DATA, ret);
 
+effect_t effect_types[] = { { 0, SHVR_VERTEX_SHADER_NAME, MTL_DIFFUSE_SHADER_NAME }, { 0, SHVR_VERTEX_SHADER_NAME, MTL_SPECULAR_SHADER_NAME } };
+
 //efct_copy_func efct_copy_funcs[] = {efct_copy_diffuse};
 
 void mtl_init() {
 	mtl_unit_id = vme_register_unit("Materials");
 	MTL_ERR_NULL_IN_DATA = vme_register_error_type(mtl_unit_id, "Null pointer in input data");
+
+	for (int i = 0; i < MTL_EFFECTS_COUNT; i++) {
+		effect_types[i].program = shvr_create_program(effect_types[i].v_shader_name, effect_types[i].f_shader_name);
+		if (vme_error_appear()) {
+			vme_print_errors();
+			return;
+		}
+	}
 }
 
 void efct_destroy_diffuse(efcthnd* effect);
@@ -92,6 +103,28 @@ mtlhnd mtl_copy(mtlhnd mtl) {
 	}
 }*/
 
+efcthnd* mtl_get_efcts(mtlhnd mtl) {
+	obj_assert(mtl, nullptr);
+	new_hnd2mtl(mtl, t);
+	return t->effects;
+}
+
+int mtl_get_size(mtlhnd mtl) {
+	obj_assert(mtl, -1);
+	new_hnd2mtl(mtl, t);
+	return t->size;
+}
+
+void mtl_draw(mtlhnd hnd, int size) {
+	obj_assert(hnd);
+	new_hnd2mtl(hnd, t);
+
+	for (int i = 0; t->size; i++) {
+		glUseProgram(efct_get_program(t->effects[i]));
+		glDrawElements(GL_TRIANGLES, size, GL_UNSIGNED_SHORT, 0);
+	}
+}
+
 void mtl_destroy(mtlhnd* hnd) {
 	obj_assert(hnd);
 	obj_assert(*hnd);
@@ -105,21 +138,18 @@ void mtl_destroy(mtlhnd* hnd) {
 	*hnd = nullptr;
 }
 
-
 //------------------EFFECTS------------------------
 
-void efct_init_base(efcthnd effect, const char* shader_name) {
-	obj_assert(effect);
-	new_hnd2efct(effect, t);
-	t->shader_name = shader_name;
+void efct_destroy(efcthnd* hnd) {
+	obj_assert(hnd);
+	obj_assert(*hnd);
+	efct_destroys[*(int*)hnd](hnd);
 }
 
-void efct_destroy(efcthnd* effect) {
-	obj_assert(effect);
-	obj_assert(*effect);
-	new_hnd2efct(effect, t);
-	delete t->shader_name;
-	efct_destroys[t->type](effect);
+GLuint efct_get_program(efcthnd hnd) {
+	obj_assert(hnd, -1);
+	new_hnd2efct(hnd, t);
+	return t->program;
 }
 
 //------------------DIFFUSE_EFFECT-----------------
@@ -127,8 +157,9 @@ void efct_destroy(efcthnd* effect) {
 efcthnd efct_create_diffuse(vechnd color) {
 	obj_assert(color, nullptr);
 	effect_diffuse_t* new_effect = new effect_diffuse_t;
-	efct_init_base((efcthnd)new_effect, "shaders/diffuse_mtl.f.glsl");
-	new_effect->color = shvr_create_uniform(color, "color", SHVR_VEC3);
+	new_effect->type = MTL_DIFFUSE;
+	new_effect->color = unif_create("color", SHVR_VEC3);
+	unif_set_data(new_effect->color, color);
 
 	return new_effect;
 }
@@ -138,7 +169,7 @@ void efct_destroy_diffuse(efcthnd* effect) {
 	obj_assert(*effect);
 
 	new_hnd2type(*effect, t, effect_diffuse_t);
-	shvr_destroy(&t->color);
+	unif_destroy(&t->color);
 
 	delete t;
 	*effect = nullptr;
@@ -149,15 +180,25 @@ efcthnd efct_copy_diffuse(efcthnd effect) {
 	new_hnd2type(effect, t, effect_diffuse_t);
 }
 
+void efct_refresh_var_locations_diffuse(efcthnd efct) {
+	obj_assert(efct);
+	new_hnd2type(efct, t, effect_diffuse_t);
+
+	unif_refresh_location(t->color, effect_types[t->type].program);
+}
+
 //-----------------SPECULAR_EFFECT----------------
 
 efcthnd efct_create_specular(vechnd color, float shinines) {
 	obj_assert(color, nullptr);
 	effect_specular_t* new_effect = new effect_specular_t;
-	efct_init_base((efcthnd)new_effect, "shaders/specular_mtl.f.glsl");
+	new_effect->type = MTL_DIFFUSE;
 
-	new_effect->color = shvr_create_uniform(color, "color", SHVR_VEC3);
-	new_effect->shinines = shvr_create_uniform(&shinines, "shininess", SHVR_FLOAT);
+	new_effect->color = unif_create("color", SHVR_VEC3);
+	unif_set_data(new_effect->color, color);
+
+	new_effect->shinines = unif_create("shininess", SHVR_FLOAT);
+	unif_set_data(new_effect->color, &shinines);
 
 	return new_effect;
 }
@@ -167,8 +208,18 @@ void efct_destroy_specular(efcthnd* effect) {
 	obj_assert(*effect);
 
 	new_hnd2type(*effect, t, effect_specular_t);
-	shvr_destroy(&t->color);
+	unif_destroy(&t->color);
+	unif_destroy(&t->shinines);
 
 	delete t;
 	*effect = nullptr;
+}
+
+
+void efct_refresh_var_locations_specular(efcthnd efct) {
+	obj_assert(efct);
+	new_hnd2type(efct, t, effect_specular_t);
+
+	unif_refresh_location(t->color, effect_types[t->type].program);
+	unif_refresh_location(t->shinines, effect_types[t->type].program);
 }
